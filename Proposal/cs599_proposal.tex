@@ -35,12 +35,21 @@
     
     Since we are modeling real world market trades, we make several assumptions to simplify the problems:
     \begin{itemize}
+      \item We can get any information about the stocks before timestamp $t$ for stock $i$. e.g. The previous stock price, the news and tweets online.
       \item Our investment will not change how the market behaves. That is, we can do it in a fully supervised manner instead of using adversarial and reinforcement learning.
       \item At timestamp $t+1$, the stock price of all previous timestamps become ground truth. This means we can adjust our model along with the investment.
     \end{itemize}
     
     \section{Datasets and Methods}
     It has been studied in \cite{social_relation_sentiment_analysis} that social sentiments reflect how stock market behaves. 
+    
+    \begin{figure}
+      \centering
+      \includegraphics[width=0.5\textwidth]{diagram}
+      \label{diagram_approach}
+      \caption{Digram of proposed approach}
+    \end{figure}
+    
     
     \section{Related Work}
     \cite{cs229_stanford_portfolio}
