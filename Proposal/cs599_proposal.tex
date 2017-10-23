@@ -1,5 +1,5 @@
 % !Mode::"TeX:UTF-8"
-\documentclass[a4paper, 11pt]{article}
+\documentclass[a4paper, 10pt, twocolumn]{article}
 \usepackage{amssymb}
 \usepackage{geometry}
 \usepackage{graphicx}
@@ -12,10 +12,10 @@
 
 \graphicspath{{./figure/}}
 
-\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\geometry{left=1.5cm,right=1.5cm,top=2.0cm,bottom=2.0cm}
 
 %\author{Chi Zhang\\\\Department of Computer Science\\\\University of Southern California}
-\title{\textbf{Deep Learning for Short Term Portfolio Optimization}\\Project Proposal\thanks{Instructor: Joseph J. Lim}}
+\title{\textbf{Deep Learning for Short Term Portfolio Optimization}\thanks{Instructor: Joseph J. Lim}}
 \author[]{Corey Chen}
 \author[]{Chi Zhang}
 \author[]{Limian Zhang\footnote{In alphabetical order}}
@@ -42,7 +42,7 @@
     
     \begin{figure}
       \centering
-      \includegraphics[width=0.5\textwidth]{diagram}
+      \includegraphics[width=0.4\textwidth]{diagram}
       \caption{Digram of proposed approach}
       \label{diagram_approach}
     \end{figure}
@@ -52,9 +52,8 @@
       \item Semantic Analysis: We parse the tweets of $n$ stocks $f_1, f_2, \cdots, f_n$ and produce a score for each stock $s_1, s_2, \cdots, s_n$, representing the expected ratio of price increase or decrease.
       \item Prediction: We take the scores provided by Semantic Analysis and combine with the history price to produce the predicted value of a stock.
       \item Risk Evaluation: To measure the risk, we consider the variance of our predicted price. We evaluate the variance by the accuracy of the prediction history.
-      \item Decision Making: With the predicted price, risk evaluation and our history trades, we produce the final actions.
+      \item Sequential Decision Making: With the predicted price, risk evaluation and our history trades, we produce the final actions.
     \end{enumerate}
-    Note that details of each sub-system is not decided yet. They can be a single neural network or more complicated structure. Or the whole system can be trained end-to-end. Our baseline is reinforcement learning based approach done in \cite{cs229_stanford_trading, cs229_stanford_portfolio}.
 %    
 %    \section{Related Work}
 %    \cite{cs229_stanford_portfolio}
