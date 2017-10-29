@@ -10,6 +10,8 @@ from pprint import pprint
 import gym
 import gym.spaces
 
+eps = 1e-7
+
 
 def random_shift(x, fraction):
     """Apply a random shift to a pandas series."""
@@ -28,9 +30,6 @@ def scale_to_start(x):
     """Scale pandas series so that it starts at one."""
     x = (x + eps) / (x[0] + eps)
     return x
-
-
-eps = 1e-7
 
 
 def sharpe(returns, freq=30, rfr=0):
@@ -113,7 +112,7 @@ class PortfolioSim(object):
     Based of [Jiang 2017](https://arxiv.org/abs/1706.10059)
     """
 
-    def __init__(self, asset_names=[], steps=128, trading_cost=0.0025, time_cost=0.0):
+    def __init__(self, asset_names=list(), steps=128, trading_cost=0.0025, time_cost=0.0):
         self.cost = trading_cost
         self.time_cost = time_cost
         self.steps = steps
@@ -230,7 +229,7 @@ class PortfolioEnv(gym.Env):
         )
         self._reset()
 
-    def _step(self, action, cash_bias=0.0):
+    def _step(self, action):
         """
         Step the env.
         Actions should be portfolio [w0...]
