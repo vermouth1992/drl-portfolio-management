@@ -47,44 +47,32 @@ def max_drawdown(returns):
 class DataGenerator(object):
     """Acts as data provider for each new episode."""
 
-    def __init__(self, df, steps=252, scale=True, augment=0.00, window_length=50):
+    def __init__(self, history, abbreviation, steps=730, window_length=50, start_date=None):
         """
-        DataSrc.
-        df - csv for data frame index of timestamps
-             and multi-index columns levels=[['LTCBTC'],...],['open','low','high','close']]
-        steps - total steps in episode
-        scale - scale the data for each episode
-        augment - fraction to augment the data by
+
+        Args:
+            history: (N, timestamp, 5) open, high, low, close, volume
+            abbreviation: a list of length N with assets name
+            steps: the total number of steps to simulate, default is 2 years
+            window_length: observation window, must be less than 50
+            start_date: the date to start. Default is None and random pick one
         """
+        import copy
+
         self.steps = steps + 1
-        self.augment = augment
-        self.scale = scale
         self.window_length = window_length
+        self.start_date = start_date
 
-        df = df.copy()
-
-        # get rid of NaN's
-        df.replace(np.nan, 0, inplace=True)
-        df = df.fillna(method="pad")
-
-        self._data = df.copy()
-        self.asset_names = self._data.columns.levels[0].tolist()
+        # make immutable class
+        self._data = history.copy() # all data
+        self.asset_names = copy.copy(abbreviation)
 
         self.reset()
 
     def _step(self):
-        # get observation matrix from dataframe
-        data_window = self.data.iloc[self.step:self.step + self.window_length].copy()
-
-        # (eq 18) prices are divided by open price
-        # While the paper says open/close, it only makes sense with close/open
-        if self.scale:
-            open = data_window.xs('open', axis=1, level='Price')
-            data_window = data_window.divide(open.iloc[-1], level='Pair')
-            data_window = data_window.drop('open', axis=1, level='Price')
-
-        # convert to matrix (window, assets, prices)
-        obs = np.array([data_window[asset].as_matrix() for asset in self.asset_names])
+        # get observation matrix from history, exclude volume, maybe volume is useful as it
+        # indicates how market total investment changes.
+        obs = self.data[:, self.step:self.step + self.window_length, :4].copy()
 
         self.step += 1
         done = self.step >= self.steps
@@ -93,14 +81,15 @@ class DataGenerator(object):
     def reset(self):
         self.step = 0
 
-        # get data for this episode
-        self.idx = np.random.randint(
-            low=self.window_length, high=len(self._data.index) - self.steps)
-        data = self._data[self.idx - self.window_length:self.idx + self.steps + 1].copy()
+        # get data for this episode, each episode might be different.
+        if self.start_date is not None:
+            self.idx = np.random.randint(
+                low=self.window_length, high=self._data.shape[1] - self.steps)
+        else:
+            self.idx = self.window_length  # compute index corresponding to start_date
+        data = self._data[self.idx - self.window_length:self.idx + self.steps + 1]
 
-        # augment data to prevent overfitting
-        data = data.apply(lambda x: random_shift(x, self.augment))
-
+        # apply augmentation?
         self.data = data
 
 
@@ -112,28 +101,30 @@ class PortfolioSim(object):
     Based of [Jiang 2017](https://arxiv.org/abs/1706.10059)
     """
 
-    def __init__(self, asset_names=list(), steps=128, trading_cost=0.0025, time_cost=0.0):
+    def __init__(self, asset_names=list(), steps=730, trading_cost=0.0025, time_cost=0.0):
+        self.asset_names = asset_names
         self.cost = trading_cost
         self.time_cost = time_cost
         self.steps = steps
-        self.asset_names = asset_names
         self.reset()
 
     def _step(self, w1, y1):
         """
         Step.
-        w1 - new action of portfolio weights - e.g. [0.1,0.9, 0.0]
+        w1 - new action of portfolio weights - e.g. [0.1,0.9,0.0]
         y1 - price relative vector also called return
             e.g. [1.0, 0.9, 1.1]
         Numbered equations are from https://arxiv.org/abs/1706.10059
         """
+        assert w1.shape == y1.shape, 'w1 and y1 must have the same shape'
+        assert y1[0] == 1.0, 'y1[0] must be 1'
+
         w0 = self.w0
         p0 = self.p0
 
         dw1 = (y1 * w0) / (np.dot(y1, w0) + eps)  # (eq7) weights evolve into
 
-        mu1 = self.cost * (
-            np.abs(dw1 - w1)).sum()  # (eq16) cost to change portfolio
+        mu1 = self.cost * (np.abs(dw1 - w1)).sum()  # (eq16) cost to change portfolio
 
         p1 = p0 * (1 - mu1) * np.dot(y1, w0)  # (eq11) final portfolio value
 
@@ -143,25 +134,23 @@ class PortfolioSim(object):
 
         rho1 = p1 / p0 - 1  # rate of returns
         r1 = np.log((p1 + eps) / (p0 + eps))  # log rate of return
-        reward = r1 / self.steps  # (22) average logarithmic cumulated return
+        reward = r1 / self.steps  # (22) average logarithmic accumulated return
 
-        # rememeber for next step
+        # remember for next step
         self.w0 = w1
         self.p0 = p1
 
-        # if we run out of money, we're done
+        # if we run out of money, we're done (losing all the money)
         done = p1 == 0
 
         info = {
             "reward": reward,
             "log_return": r1,
             "portfolio_value": p1,
-            # "returns": y1,
             "return": y1.mean(),
             "rate_of_return": rho1,
             "weights_mean": w1.mean(),
             "weights_std": w1.std(),
-            # "cash_bias": w1[0],
             "cost": mu1,
         }
         self.infos.append(info)
@@ -169,7 +158,7 @@ class PortfolioSim(object):
 
     def reset(self):
         self.infos = []
-        self.w0 = np.array([1.0] + [0.0] * (len(self.asset_names) - 1))
+        self.w0 = np.array([1.0] + [0.0] * len(self.asset_names))
         self.p0 = 1.0
 
 
@@ -184,10 +173,9 @@ class PortfolioEnv(gym.Env):
     metadata = {'render.modes': ['human', 'ansi']}
 
     def __init__(self,
-                 df,
-                 steps=256,
-                 scale=True,
-                 augment=0.00,
+                 history,
+                 abbreviation,
+                 steps=730,  # 2 years
                  trading_cost=0.0025,
                  time_cost=0.00,
                  window_length=50,
@@ -204,10 +192,10 @@ class PortfolioEnv(gym.Env):
             time_cost - cost of holding as a fraction
             window_length - how many past observations to return
         """
-        self.src = DataGenerator(df=df, steps=steps, scale=scale, augment=augment, window_length=window_length)
+        self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length)
 
         self.sim = PortfolioSim(
-            asset_names=self.src.asset_names,
+            asset_names=abbreviation,
             trading_cost=trading_cost,
             time_cost=time_cost,
             steps=steps)
@@ -215,18 +203,11 @@ class PortfolioEnv(gym.Env):
         # openai gym attributes
         # action will be the portfolio weights from 0 to 1 for each asset
         self.action_space = gym.spaces.Box(
-            0, 1, shape=len(self.src.asset_names))
+            0, 1, shape=len(self.src.asset_names) + 1)  # include cash
 
         # get the observation space from the data min and max
-        self.observation_space = gym.spaces.Box(
-            0,
-            1,
-            (
-                len(self.src.asset_names) - 1,
-                window_length,
-                len(self.src._data.columns.levels[1]) - 1
-            )
-        )
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(abbreviation), window_length,
+                                                                      history.shape[-1]))
         self._reset()
 
     def _step(self, action):
@@ -238,7 +219,7 @@ class PortfolioEnv(gym.Env):
         """
         np.testing.assert_almost_equal(
             action.shape,
-            (len(self.sim.asset_names),)
+            (len(self.sim.asset_names) + 1,)
         )
 
         # normalise just in case
@@ -254,14 +235,16 @@ class PortfolioEnv(gym.Env):
 
         observation, done1 = self.src._step()
 
-        y1 = observation[:, -1, 0]  # relative price vector (open/close)
+        # relative price vector of last observation day (close/open)
+        close_price_vector = observation[:, -1, 3]
+        open_price_vector = observation[:, -1, 0]
+        y1 = np.insert(close_price_vector / open_price_vector, 0, 1.0)
         reward, info, done2 = self.sim._step(weights, y1)
-        observation = observation[1:, :, :]  # remove cash columns
 
         # calculate return for buy and hold a bit of each asset
         info['market_value'] = np.cumprod([inf["return"] for inf in self.infos + [info]])[-1]
         # add dates
-        info['date'] = self.src.data.index[self.src.step].timestamp()
+        # info['date'] = self.src.data.index[self.src.step].timestamp()
         info['steps'] = self.src.step
 
         self.infos.append(info)
@@ -276,22 +259,26 @@ class PortfolioEnv(gym.Env):
         observation, reward, done, info = self.step(action)
         return observation
 
-    def _render(self, mode='human', close=False):
+    def _render(self, mode='ansi', close=False):
         if close:
             return
         if mode == 'ansi':
             pprint(self.infos[-1])
-        elif mode == 'human':
-            self.plot()
+        # elif mode == 'human':
+        #     self.plot()
 
-    def plot(self):
-        # show a plot of portfolio vs mean market performance
-        df_info = pd.DataFrame(self.infos)
-        df_info.index = pd.to_datetime(df_info["date"], unit='s')
-        del df_info['date']
+    # def plot(self):
+    #     # show a plot of portfolio vs mean market performance
+    #     df_info = pd.DataFrame(self.infos)
+    #     df_info.index = pd.to_datetime(df_info["date"], unit='s')
+    #     del df_info['date']
+    #
+    #     mdd = max_drawdown(df_info.rate_of_return + 1)
+    #     sharpe_ratio = sharpe(df_info.rate_of_return)
+    #     title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
+    #
+    #     df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf())
 
-        mdd = max_drawdown(df_info.rate_of_return + 1)
-        sharpe_ratio = sharpe(df_info.rate_of_return)
-        title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
 
-        df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf())
+if __name__ == '__main__':
+    env = PortfolioEnv(np.random.rand(2, 1000, 4), ['a', 'b'])
