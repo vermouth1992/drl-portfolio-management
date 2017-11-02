@@ -10,6 +10,8 @@ from pprint import pprint
 import gym
 import gym.spaces
 
+from utils.data import date_to_index
+
 eps = 1e-7
 
 
@@ -55,7 +57,8 @@ class DataGenerator(object):
             abbreviation: a list of length N with assets name
             steps: the total number of steps to simulate, default is 2 years
             window_length: observation window, must be less than 50
-            start_date: the date to start. Default is None and random pick one
+            start_date: the date to start. Default is None and random pick one.
+                        It should be a string e.g. '2012-08-13'
         """
         import copy
 
@@ -82,11 +85,14 @@ class DataGenerator(object):
         self.step = 0
 
         # get data for this episode, each episode might be different.
-        if self.start_date is not None:
+        if self.start_date is None:
             self.idx = np.random.randint(
                 low=self.window_length, high=self._data.shape[1] - self.steps)
         else:
-            self.idx = self.window_length  # compute index corresponding to start_date
+            # compute index corresponding to start_date for repeatable sequence
+            self.idx = date_to_index(self.start_date)
+            assert self.idx >= self.window_length and self.idx <= self._data.shape[1] - self.steps, \
+                'Invalid start date, must be window_length day after start date and simulation steps day before end date'
         data = self._data[self.idx - self.window_length:self.idx + self.steps + 1]
 
         # apply augmentation?

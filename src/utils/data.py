@@ -159,3 +159,21 @@ def index_to_date(index):
 
     """
     return (start_datetime + datetime.timedelta(index)).strftime(date_format)
+
+
+def date_to_index(date_string):
+    """
+
+    Args:
+        date_string: in format of '2012-08-13'
+
+    Returns: the days from start_date: '2012-08-13'
+
+    >>> date_to_index('2012-08-13')
+    0
+    >>> date_to_index('2012-08-12')
+    -1
+    >>> date_to_index('2012-08-15')
+    2
+    """
+    return (datetime.datetime.strptime(date_string, date_format) - start_datetime).days
