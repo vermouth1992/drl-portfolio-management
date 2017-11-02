@@ -135,7 +135,6 @@ class PortfolioSim(object):
         rho1 = p1 / p0 - 1  # rate of returns
         r1 = np.log((p1 + eps) / (p0 + eps))  # log rate of return
         reward = r1 / self.steps  # (22) average logarithmic accumulated return
-
         # remember for next step
         self.w0 = w1
         self.p0 = p1
@@ -249,7 +248,7 @@ class PortfolioEnv(gym.Env):
 
         self.infos.append(info)
 
-        return observation, reward, done1 + done2, info
+        return observation, reward, done1 or done2, info
 
     def _reset(self):
         self.sim.reset()
