@@ -1,16 +1,15 @@
 """
 Modified from https://github.com/wassname/rl-portfolio-management/blob/master/src/environments/portfolio.py
 """
+from __future__ import print_function
 
 import numpy as np
-import pandas as pd
-from matplotlib import pyplot as plt
 from pprint import pprint
 
 import gym
 import gym.spaces
 
-from utils.data import date_to_index
+from utils.data import date_to_index, index_to_date
 
 eps = 1e-7
 
@@ -53,8 +52,8 @@ class DataGenerator(object):
         """
 
         Args:
-            history: (N, timestamp, 5) open, high, low, close, volume
-            abbreviation: a list of length N with assets name
+            history: (num_stocks, timestamp, 5) open, high, low, close, volume
+            abbreviation: a list of length num_stocks with assets name
             steps: the total number of steps to simulate, default is 2 years
             window_length: observation window, must be less than 50
             start_date: the date to start. Default is None and random pick one.
@@ -67,15 +66,13 @@ class DataGenerator(object):
         self.start_date = start_date
 
         # make immutable class
-        self._data = history.copy() # all data
+        self._data = history.copy()  # all data
         self.asset_names = copy.copy(abbreviation)
-
-        self.reset()
 
     def _step(self):
         # get observation matrix from history, exclude volume, maybe volume is useful as it
         # indicates how market total investment changes.
-        obs = self.data[:, self.step:self.step + self.window_length, :4].copy()
+        obs = self.data[:, self.step:self.step + self.window_length, :].copy()
 
         self.step += 1
         done = self.step >= self.steps
@@ -93,7 +90,8 @@ class DataGenerator(object):
             self.idx = date_to_index(self.start_date)
             assert self.idx >= self.window_length and self.idx <= self._data.shape[1] - self.steps, \
                 'Invalid start date, must be window_length day after start date and simulation steps day before end date'
-        data = self._data[self.idx - self.window_length:self.idx + self.steps + 1]
+        print('Start date: {}'.format(index_to_date(self.idx)))
+        data = self._data[:, self.idx - self.window_length:self.idx + self.steps + 1, :4]
 
         # apply augmentation?
         self.data = data
@@ -112,7 +110,6 @@ class PortfolioSim(object):
         self.cost = trading_cost
         self.time_cost = time_cost
         self.steps = steps
-        self.reset()
 
     def _step(self, w1, y1):
         """
@@ -212,7 +209,7 @@ class PortfolioEnv(gym.Env):
 
         # get the observation space from the data min and max
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(abbreviation), window_length,
-                                                                      history.shape[-1]))
+                                                                                 history.shape[-1]))
         self._reset()
 
     def _step(self, action):
@@ -269,20 +266,20 @@ class PortfolioEnv(gym.Env):
             return
         if mode == 'ansi':
             pprint(self.infos[-1])
-        # elif mode == 'human':
-        #     self.plot()
+            # elif mode == 'human':
+            #     self.plot()
 
-    # def plot(self):
-    #     # show a plot of portfolio vs mean market performance
-    #     df_info = pd.DataFrame(self.infos)
-    #     df_info.index = pd.to_datetime(df_info["date"], unit='s')
-    #     del df_info['date']
-    #
-    #     mdd = max_drawdown(df_info.rate_of_return + 1)
-    #     sharpe_ratio = sharpe(df_info.rate_of_return)
-    #     title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
-    #
-    #     df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf())
+            # def plot(self):
+            #     # show a plot of portfolio vs mean market performance
+            #     df_info = pd.DataFrame(self.infos)
+            #     df_info.index = pd.to_datetime(df_info["date"], unit='s')
+            #     del df_info['date']
+            #
+            #     mdd = max_drawdown(df_info.rate_of_return + 1)
+            #     sharpe_ratio = sharpe(df_info.rate_of_return)
+            #     title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
+            #
+            #     df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf())
 
 
 if __name__ == '__main__':
