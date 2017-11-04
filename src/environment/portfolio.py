@@ -4,6 +4,8 @@ Modified from https://github.com/wassname/rl-portfolio-management/blob/master/sr
 from __future__ import print_function
 
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from pprint import pprint
 
 import gym
@@ -35,14 +37,14 @@ def scale_to_start(x):
 
 def sharpe(returns, freq=30, rfr=0):
     """Given a set of returns, calculates naive (rfr=0) sharpe (eq 28)."""
-    return (np.sqrt(freq) * np.mean(returns - rfr)) / np.std(returns - rfr)
+    return (np.sqrt(freq) * np.mean(returns - rfr + eps)) / np.std(returns - rfr + eps)
 
 
 def max_drawdown(returns):
     """Max drawdown."""
     peak = returns.max()
     trough = returns[returns.argmax():].min()
-    return (trough - peak) / trough
+    return (trough - peak) / (trough + eps)
 
 
 class DataGenerator(object):
@@ -59,6 +61,7 @@ class DataGenerator(object):
             start_date: the date to start. Default is None and random pick one.
                         It should be a string e.g. '2012-08-13'
         """
+        assert history.shape[0] == len(abbreviation), 'Number of stock is not consistent'
         import copy
 
         self.steps = steps + 1
@@ -71,8 +74,12 @@ class DataGenerator(object):
 
     def _step(self):
         # get observation matrix from history, exclude volume, maybe volume is useful as it
-        # indicates how market total investment changes.
+        # indicates how market total investment changes. Normalize could be critical here
         obs = self.data[:, self.step:self.step + self.window_length, :].copy()
+        num_stock, window_length, num_feature = obs.shape
+        # normalize obs with open price
+        first_day_open_price = obs[:, 0, 0]
+        obs /= first_day_open_price[:, np.newaxis, np.newaxis]
 
         self.step += 1
         done = self.step >= self.steps
@@ -92,7 +99,6 @@ class DataGenerator(object):
                 'Invalid start date, must be window_length day after start date and simulation steps day before end date'
         print('Start date: {}'.format(index_to_date(self.idx)))
         data = self._data[:, self.idx - self.window_length:self.idx + self.steps + 1, :4]
-
         # apply augmentation?
         self.data = data
 
@@ -181,6 +187,7 @@ class PortfolioEnv(gym.Env):
                  trading_cost=0.0025,
                  time_cost=0.00,
                  window_length=50,
+                 start_date=None
                  ):
         """
         An environment for financial portfolio management.
@@ -194,7 +201,8 @@ class PortfolioEnv(gym.Env):
             time_cost - cost of holding as a fraction
             window_length - how many past observations to return
         """
-        self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length)
+        self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length,
+                                 start_date=start_date)
 
         self.sim = PortfolioSim(
             asset_names=abbreviation,
@@ -246,7 +254,7 @@ class PortfolioEnv(gym.Env):
         # calculate return for buy and hold a bit of each asset
         info['market_value'] = np.cumprod([inf["return"] for inf in self.infos + [info]])[-1]
         # add dates
-        # info['date'] = self.src.data.index[self.src.step].timestamp()
+        info['date'] = index_to_date(self.src.idx + self.src.step)
         info['steps'] = self.src.step
 
         self.infos.append(info)
@@ -261,25 +269,22 @@ class PortfolioEnv(gym.Env):
         observation, reward, done, info = self.step(action)
         return observation
 
-    def _render(self, mode='ansi', close=False):
+    def _render(self, mode='human', close=False):
         if close:
             return
         if mode == 'ansi':
             pprint(self.infos[-1])
-            # elif mode == 'human':
-            #     self.plot()
+        elif mode == 'human':
+            self.plot()
 
-            # def plot(self):
-            #     # show a plot of portfolio vs mean market performance
-            #     df_info = pd.DataFrame(self.infos)
-            #     df_info.index = pd.to_datetime(df_info["date"], unit='s')
-            #     del df_info['date']
-            #
-            #     mdd = max_drawdown(df_info.rate_of_return + 1)
-            #     sharpe_ratio = sharpe(df_info.rate_of_return)
-            #     title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
-            #
-            #     df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf())
+    def plot(self):
+        # show a plot of portfolio vs mean market performance
+        df_info = pd.DataFrame(self.infos)
+        df_info.index = df_info["date"]
+        mdd = max_drawdown(df_info.rate_of_return + 1)
+        sharpe_ratio = sharpe(df_info.rate_of_return)
+        title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
+        df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf(), rot=30)
 
 
 if __name__ == '__main__':
