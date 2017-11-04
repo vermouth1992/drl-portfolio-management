@@ -46,7 +46,7 @@ class ActorNetwork(object):
         """ Create actor network.
         Topology: (N, 17, 50, 4) -> (N, 17, 48, 10) -> (N, 17, 1, 20) -> (N, 17, 1, 21) -> (N, 17) -> softmax
 
-        Returns: critic network
+        Returns: actor network
 
         """
         observation_in = Input(shape=(self.num_stocks + 1, self.window_length, self.feature_size),
@@ -95,7 +95,7 @@ class ActorNetwork(object):
     def target_train(self):
         actor_weights = self.model.get_weights()
         actor_target_weights = self.target_model.get_weights()
-        for i in xrange(len(actor_weights)):
+        for i in range(len(actor_weights)):
             actor_target_weights[i] = self.tau * actor_weights[i] + (1 - self.tau) * actor_target_weights[i]
         self.target_model.set_weights(actor_target_weights)
 
