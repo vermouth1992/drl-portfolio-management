@@ -12,6 +12,7 @@ from keras.optimizers import Adam
 import keras
 import keras.backend as K
 
+
 class CriticNetwork(object):
     def __init__(self, sess, window_length, num_stocks, feature_size=4, tau=1e-3, learning_rate=1e-4):
         """
@@ -37,8 +38,6 @@ class CriticNetwork(object):
         self.model, self.action, self.state = self.create_critic_network()
         self.target_model, self.target_action, self.target_state = self.create_critic_network()
         self.action_grads = tf.gradients(self.model.output, self.action)  # GRADIENTS for policy update
-        self.sess.run(tf.global_variables_initializer())
-
 
     def create_critic_network(self):
         """
@@ -84,13 +83,11 @@ class CriticNetwork(object):
 
         return model, current_action_in, (observation_in, previous_action_in)
 
-
     def gradients(self, states, actions):
         return self.sess.run(self.action_grads, feed_dict={
             self.state: states,
             self.action: actions
         })[0]
-
 
     def target_train(self):
         critic_weights = self.model.get_weights()
@@ -98,5 +95,3 @@ class CriticNetwork(object):
         for i in range(len(critic_weights)):
             critic_target_weights[i] = self.tau * critic_weights[i] + (1 - self.tau) * critic_target_weights[i]
         self.target_model.set_weights(critic_target_weights)
-
-

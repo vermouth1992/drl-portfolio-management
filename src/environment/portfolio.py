@@ -192,8 +192,6 @@ class PortfolioEnv(gym.Env):
         """
         An environment for financial portfolio management.
         Params:
-            df - csv for data frame index of timestamps
-                 and multi-index columns levels=[['LTCBTC'],...],['open','low','high','close']]
             steps - steps in episode
             scale - scale data and each episode (except return)
             augment - fraction to randomly shift data by
@@ -201,6 +199,9 @@ class PortfolioEnv(gym.Env):
             time_cost - cost of holding as a fraction
             window_length - how many past observations to return
         """
+        self.window_length = window_length
+        self.num_stocks = history.shape[0]
+
         self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length,
                                  start_date=start_date)
 
@@ -267,7 +268,7 @@ class PortfolioEnv(gym.Env):
         self.infos = []
         action = self.sim.w0
         observation, reward, done, info = self.step(action)
-        return observation
+        return observation, action
 
     def _render(self, mode='human', close=False):
         if close:
