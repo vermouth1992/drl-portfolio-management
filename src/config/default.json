@@ -2,8 +2,8 @@
   "episode": 100,
   "buffer size": 100000,
   "batch size": 32,
-  "gamma": 0.99,
-  "tau": 0.001,
+  "gamma": 1.0,
+  "tau": 0.01,
   "actor learning rate": 1e-3,
   "critic learning rate": 1e-3,
   "seed": 1337
