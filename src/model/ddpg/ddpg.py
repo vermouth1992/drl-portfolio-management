@@ -4,14 +4,12 @@ The deep deterministic policy gradient model. Contains main training loop and de
 from __future__ import print_function
 
 import json
+import numpy as np
+import tensorflow as tf
 
 from .actor import ActorNetwork
 from .critic import CriticNetwork
 from .replay_buffer import ReplayBuffer
-
-import numpy as np
-import tensorflow as tf
-
 
 class DDPG(object):
     def __init__(self, env=None, config_file='config/default.json',
@@ -60,7 +58,7 @@ class DDPG(object):
             if verbose:
                 print("Episode: " + str(i) + " Replay Buffer " + str(self.buffer.count()))
 
-            previous_observation, previous_action = self.env._reset()
+            previous_observation, previous_action = self.env.reset()
             total_reward = 0
             done = False
             # keeps sampling until done
@@ -79,7 +77,7 @@ class DDPG(object):
                     print("Episode: {}, Action: {}".format(i, action))
 
                 # step forward
-                observation, reward, done, _ = self.env._step(action)
+                observation, reward, done, _ = self.env.step(action)
                 # add to buffer
                 self.buffer.add((previous_observation, previous_action), action, reward, observation, done)
                 # batch update

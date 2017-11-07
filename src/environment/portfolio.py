@@ -3,10 +3,11 @@ Modified from https://github.com/wassname/rl-portfolio-management/blob/master/sr
 """
 from __future__ import print_function
 
+from pprint import pprint
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from pprint import pprint
 
 import gym
 import gym.spaces
@@ -97,7 +98,7 @@ class DataGenerator(object):
             self.idx = date_to_index(self.start_date)
             assert self.idx >= self.window_length and self.idx <= self._data.shape[1] - self.steps, \
                 'Invalid start date, must be window_length day after start date and simulation steps day before end date'
-        print('Start date: {}'.format(index_to_date(self.idx)))
+        # print('Start date: {}'.format(index_to_date(self.idx)))
         data = self._data[:, self.idx - self.window_length:self.idx + self.steps + 1, :4]
         # apply augmentation?
         self.data = data
@@ -271,7 +272,7 @@ class PortfolioEnv(gym.Env):
         self.src.reset()
         self.infos = []
         action = self.sim.w0
-        observation, reward, done, info = self.step(action)
+        observation, reward, done, info = self._step(action)
         return observation, action
 
     def _render(self, mode='human', close=False):
