@@ -246,10 +246,14 @@ class PortfolioEnv(gym.Env):
 
         observation, done1 = self.src._step()
 
+        # concatenate observation with ones
+        cash_observation = np.ones((1, self.window_length, observation.shape[2]))
+        observation = np.concatenate((cash_observation, observation), axis=0)
+
         # relative price vector of last observation day (close/open)
         close_price_vector = observation[:, -1, 3]
         open_price_vector = observation[:, -1, 0]
-        y1 = np.insert(close_price_vector / open_price_vector, 0, 1.0)
+        y1 = close_price_vector / open_price_vector
         reward, info, done2 = self.sim._step(weights, y1)
 
         # calculate return for buy and hold a bit of each asset

@@ -77,7 +77,7 @@ class CriticNetwork(object):
         # the final fc layer put all stocks feature together
         output = Dense(1, activation='linear')(output)
 
-        model = Model(input=[observation_in, previous_action_in, current_action_in], output=output)
+        model = Model(inputs=[observation_in, previous_action_in, current_action_in], outputs=output)
 
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
 

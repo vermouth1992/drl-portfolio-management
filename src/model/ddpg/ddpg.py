@@ -5,23 +5,20 @@ from __future__ import print_function
 
 import json
 
-from actor import ActorNetwork
-from critic import CriticNetwork
-from replay_buffer import ReplayBuffer
+from .actor import ActorNetwork
+from .critic import CriticNetwork
+from .replay_buffer import ReplayBuffer
 
 import numpy as np
 import tensorflow as tf
 
-from ornstein_uhlenbeck import OrnsteinUhlenbeck
-
 
 class DDPG(object):
-    def __init__(self, env=None, save_every_episode=5, config_file='config/default.json',
+    def __init__(self, env=None, config_file='config/default.json',
                  actor_weights_path='weights/actor_default.h5', critic_weights_path='weights/critic_default.h5'):
         with open(config_file) as f:
-            self.config = json.loads(f)
+            self.config = json.load(f)
         assert self.config != None, "Can't load config file"
-        self.save_every_episode = save_every_episode
         self.actor_weights_path = actor_weights_path
         self.critic_weights_path = critic_weights_path
         tf_config = tf.ConfigProto()
@@ -53,10 +50,10 @@ class DDPG(object):
         self.buffer = ReplayBuffer(self.config['buffer size'])
         self.sess.run(tf.global_variables_initializer())
 
-    def train(self, verbose=True):
+    def train(self, save_every_episode=5, print_every_step=365, verbose=True):
         np.random.seed(self.config['seed'])
         num_episode = self.config['episode']
-        batch_size = self.config['batch_size']
+        batch_size = self.config['batch size']
         gamma = self.config['gamma']
         # main training loop
         for i in range(num_episode):
@@ -72,13 +69,15 @@ class DDPG(object):
                 action = self.predict(previous_observation, previous_action)
                 # add noise
                 sigma = np.std(action, axis=1)
-                noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, sigma)
-                action += noise
+                # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
+                noise = np.random.randn(*action.shape) * sigma
+                action = action + noise
                 action = np.squeeze(action, axis=0)
                 action = np.clip(action, 0.0, 1.0)
                 action /= np.sum(action)
-                if verbose:
+                if verbose and self.env.src.step % print_every_step == 0:
                     print("Episode: {}, Action: {}".format(i, action))
+
                 # step forward
                 observation, reward, done, _ = self.env._step(action)
                 # add to buffer
@@ -112,12 +111,11 @@ class DDPG(object):
                 total_reward += reward
                 previous_observation, previous_action = observation, action
 
-                if verbose:
-                    print("Episode", i, "Step", self.env.src.step, "Action", action, "Reward",
-                          reward, "Loss", loss)
+                if verbose and self.env.src.step % print_every_step == 0:
+                    print("Episode:", i, "Step:", self.env.src.step, "Reward:", reward, "Loss:", loss)
 
             # save weights after every # of episodes
-            if i % self.save_every_episode == 0:
+            if i % save_every_episode == 0:
                 self.actor.model.save_weights(self.actor_weights_path)
                 self.critic.model.save_weights(self.critic_weights_path)
 
@@ -142,16 +140,12 @@ class DDPG(object):
             observation = np.expand_dims(observation, axis=0)
         if previous_action.ndim == 1:
             previous_action = np.expand_dims(previous_action, axis=0)
-        # adding cash constant to observation
-        # concatenate (batch_size, 1, window_length, 4) with ones to observation
         batch_size, num_stocks, window_length, feature_size = observation.shape
         # comment out to accelerate
-        assert batch_size == self.config['batch size']
-        assert num_stocks == self.env.num_stocks
+        assert batch_size <= self.config['batch size']
+        assert num_stocks == self.env.num_stocks + 1
         assert window_length == self.env.window_length
         assert feature_size == 4
-        cash_observation = np.ones((batch_size, 1, window_length, feature_size))
-        observation = np.concatenate((cash_observation, observation), axis=1)
         if model == 'actor':
             return self.actor.model.predict([observation, previous_action])
         elif model == 'target':
@@ -172,7 +166,5 @@ class DDPG(object):
         """
         assert observation.ndim == 4 and previous_action.ndim == 2 and next_action.ndim == 2
         batch_size, num_stocks, window_length, feature_size = observation.shape
-        assert num_stocks == self.env.num_stocks
-        cash_observation = np.ones((batch_size, 1, window_length, feature_size))
-        observation = np.concatenate((cash_observation, observation), axis=1)
+        assert num_stocks == self.env.num_stocks + 1
         return self.critic.target_model.predict([observation, previous_action, next_action])

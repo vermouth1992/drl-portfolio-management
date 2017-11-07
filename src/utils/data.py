@@ -2,6 +2,8 @@
 Contains a set of utility function to process data
 """
 
+from __future__ import print_function
+
 import csv
 import datetime
 import numpy as np
@@ -51,16 +53,16 @@ def create_dataset(filepath):
                 current_company_index += 1
                 # initialize
                 if current_date != None and (current_date - end_datetime).days != 1:
-                    print row[6]
-                    print current_date
+                    print(row[6])
+                    print(current_date)
                 assert current_date is None or (current_date - end_datetime).days == 1, \
                     'Previous end date is not 2017-08-11'
                 current_date = start_datetime
                 current_date_index = 0
                 date = datetime.datetime.strptime(row[0], date_format)
                 if (date - start_datetime).days != 0:
-                    print row[6]
-                    print current_date
+                    print(row[6])
+                    print(current_date)
                     exclude_set.add(row[6])
                     current_date = end_datetime + datetime.timedelta(days=1)
                     continue
@@ -70,7 +72,7 @@ def create_dataset(filepath):
                         row[5] = 0
                     data = np.array(map(float, row[1:6]))
                 except:
-                    print row[6]
+                    print(row[6])
                     assert False
                 history[current_company_index][current_date_index] = data
                 previous_day_data = data
@@ -146,6 +148,7 @@ def read_stock_history(filepath='datasets/stocks_history.h5'):
     with h5py.File(filepath, 'r') as f:
         history = f['history'][:]
         abbreviation = f['abbreviation'][:].tolist()
+        abbreviation = [abbr.decode('utf-8') for abbr in abbreviation]
     return history, abbreviation
 
 
