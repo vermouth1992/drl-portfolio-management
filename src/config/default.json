@@ -1,5 +1,5 @@
 {
-  "episode": 10,
+  "episode": 10000,
   "buffer size": 100000,
   "batch size": 32,
   "gamma": 0.99,

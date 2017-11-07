@@ -119,11 +119,9 @@ class DDPG(object):
                 self.actor.model.save_weights(self.actor_weights_path)
                 self.critic.model.save_weights(self.critic_weights_path)
 
-            if verbose:
-                print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
+            print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
 
-        if verbose:
-            print('Finish.')
+        print('Finish.')
 
     def predict(self, observation, previous_action, model='actor'):
         """ predict the next action using actor model
