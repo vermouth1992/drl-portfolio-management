@@ -188,7 +188,8 @@ class PortfolioEnv(gym.Env):
                  trading_cost=0.0025,
                  time_cost=0.00,
                  window_length=50,
-                 start_date=None
+                 start_idx=0,
+                 sample_start_date=None
                  ):
         """
         An environment for financial portfolio management.
@@ -199,12 +200,15 @@ class PortfolioEnv(gym.Env):
             trading_cost - cost of trade as a fraction
             time_cost - cost of holding as a fraction
             window_length - how many past observations to return
+            start_idx - The number of days from '2012-08-13' of the dataset
+            sample_start_date - The start date sampling from the history
         """
         self.window_length = window_length
         self.num_stocks = history.shape[0]
+        self.start_idx = start_idx
 
         self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length,
-                                 start_date=start_date)
+                                 start_date=sample_start_date)
 
         self.sim = PortfolioSim(
             asset_names=abbreviation,
@@ -260,7 +264,7 @@ class PortfolioEnv(gym.Env):
         # calculate return for buy and hold a bit of each asset
         info['market_value'] = np.cumprod([inf["return"] for inf in self.infos + [info]])[-1]
         # add dates
-        info['date'] = index_to_date(self.src.idx + self.src.step)
+        info['date'] = index_to_date(self.start_idx + self.src.idx + self.src.step)
         info['steps'] = self.src.step
 
         self.infos.append(info)
