@@ -143,6 +143,8 @@ def read_stock_history(filepath='datasets/stocks_history.h5'):
         filepath: path of file
 
     Returns:
+        history:
+        abbreviation:
 
     """
     with h5py.File(filepath, 'r') as f:
@@ -180,3 +182,20 @@ def date_to_index(date_string):
     2
     """
     return (datetime.datetime.strptime(date_string, date_format) - start_datetime).days
+
+
+def compute_optimal_action(history):
+    """ Compute the optimal action in each timestamp. It requires no trading cost
+
+    Args:
+        history: numpy array of shape (num_stocks, T, num_features)
+
+    Returns:
+        actions (T,): each one is a label to indicate which stock to choose, ranging from [0, num_stocks]
+
+    """
+    num_stocks, T, num_features = history.shape
+    cash_history = np.ones((1, T, num_features))
+    history = np.concatenate((cash_history, history), axis=0)
+
+

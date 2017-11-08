@@ -49,12 +49,12 @@
     \end{equation}
     where $w_0=[1, 0, \cdots, 0]$. If we consider a trading cost factor $\mu$, then the trading cost of each timestamp is:
     \begin{equation}
-    {\mu}_t=\mu\sum{|\frac{y_t \odot w_{t-1}}{y_t \cdot w_{t-1}} - w_{t-1}|}
+    {\mu}_t=\mu\sum{|\frac{y_t \odot w_{t-1}}{y_t \cdot w_{t-1}} - w_{t}|}
     \end{equation}
     where $\odot$ is element-wise product. Then equation~\ref{profit} becomes:
     \begin{equation}
     \label{profit_mu}
-    p_T=\prod_{t=1}^{T}\mu_t y_t\cdot w_{t-1}
+    p_T=\prod_{t=1}^{T}(1-\mu_t) y_t\cdot w_{t-1}
     \end{equation}
     
     \subsection{Key Assumptions and Goal}
