@@ -2,6 +2,7 @@
 The deep deterministic policy gradient model. Contains main training loop and deployment
 """
 from __future__ import print_function
+from past.builtins import raw_input
 
 import json
 import numpy as np
@@ -14,12 +15,17 @@ from .replay_buffer import ReplayBuffer
 
 class DDPG(object):
     def __init__(self, env=None, config_file='config/default.json',
-                 actor_weights_path='weights/actor_default.h5', critic_weights_path='weights/critic_default.h5'):
+                 actor_path='weights/actor_default.h5',
+                 critic_path='weights/critic_default.h5',
+                 actor_target_path='weights/actor_target_default.h5',
+                 critic_target_path='weights/critic_target_default.h5'):
         with open(config_file) as f:
             self.config = json.load(f)
         assert self.config != None, "Can't load config file"
-        self.actor_weights_path = actor_weights_path
-        self.critic_weights_path = critic_weights_path
+        self.actor_path = actor_path
+        self.critic_path = critic_path
+        self.actor_target_path = actor_target_path
+        self.critic_target_path = critic_target_path
         tf_config = tf.ConfigProto()
         tf_config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=tf_config)
@@ -30,7 +36,13 @@ class DDPG(object):
         self.env = env
 
     def build_model(self, load_weights=True):
-        """ Build model and load from previous trained weights if any
+        """ Load training history from path
+
+        Args:
+            load_weights (Bool): True to resume training from file or just deploying.
+                                 Otherwise, training from scratch.
+
+        Returns:
 
         """
         self.actor = ActorNetwork(self.sess, self.env.window_length, self.env.num_stocks, tau=self.config['tau'],
@@ -39,10 +51,10 @@ class DDPG(object):
                                     learning_rate=self.config['critic learning rate'])
         if load_weights:
             try:
-                self.actor.model.load_weights(self.actor_weights_path)
-                self.actor.target_model.load_weights(self.actor_weights_path)
-                self.critic.model.load_weights(self.critic_weights_path)
-                self.critic.model.load_weights(self.critic_weights_path)
+                self.actor.model.load(self.actor_path)
+                self.critic.model.load(self.critic_path)
+                self.actor.target_model.load(self.actor_target_path)
+                self.critic.target_model.load(self.critic_target_path)
                 print('Model load successfully')
             except:
                 print('Build model from scratch')
@@ -69,20 +81,20 @@ class DDPG(object):
                 loss = 0
                 action = self.predict(previous_observation, previous_action).squeeze(axis=0)
                 # add noise
-                sigma = np.std(action, axis=0) * 100
-                # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Action before: {}".format(i, action))
-                noise = np.random.randn(*action.shape) * sigma
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Noise: {}".format(i, noise))
-                action = action + noise
-                action = np.clip(action, 0.0, 1.0)
-                # if action is 0, assign one of them to 1.0 in case zero division
-                if np.sum(action) == 0.0:
-                    idx = np.random.randint(len(action))
-                    action[idx] = 1.0
-                action /= np.sum(action)
+                # sigma = np.std(action, axis=0) * 100
+                # # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
+                # if verbose and self.env.src.step % print_every_step == 0 and debug:
+                #     print("Episode: {}, Action before: {}".format(i, action))
+                # noise = np.random.randn(*action.shape) * sigma
+                # if verbose and self.env.src.step % print_every_step == 0 and debug:
+                #     print("Episode: {}, Noise: {}".format(i, noise))
+                # action = action + noise
+                # action = np.clip(action, 0.0, 1.0)
+                # # if action is 0, assign one of them to 1.0 in case zero division
+                # if np.sum(action) == 0.0:
+                #     idx = np.random.randint(len(action))
+                #     action[idx] = 1.0
+                # action /= np.sum(action)
                 if verbose and self.env.src.step % print_every_step == 0 and debug:
                     print("Episode: {}, Action after: {}".format(i, action))
 
@@ -107,16 +119,11 @@ class DDPG(object):
                 rewards = np.asarray([e[2] for e in batch])
                 new_observations = np.asarray([e[3] for e in batch])
                 dones = np.asarray([e[4] for e in batch])
-                y_t = np.empty_like(rewards)
 
                 target_q_values = self.evaluate_q(new_observations, new_actions,
                                                   self.predict(new_observations, new_actions, model='target'))
-
-                for k in range(len(batch)):
-                    if dones[k]:
-                        y_t[k] = rewards[k]
-                    else:
-                        y_t[k] = rewards[k] + gamma * target_q_values[k]
+                target_q_values = np.squeeze(target_q_values, axis=1)
+                y_t = rewards + gamma * target_q_values * dones
 
                 loss += self.critic.model.train_on_batch([old_observations, old_actions, new_actions], y_t)
                 a_for_grad = self.predict(old_observations, old_actions)
@@ -133,8 +140,10 @@ class DDPG(object):
 
             # save weights after every # of episodes
             if i % save_every_episode == 0:
-                self.actor.model.save(self.actor_weights_path)
-                self.critic.model.save(self.critic_weights_path)
+                self.actor.model.save(self.actor_path)
+                self.critic.model.save(self.critic_path)
+                self.actor.target_model.save(self.actor_target_path)
+                self.critic.target_model.save(self.critic_target_path)
 
             print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
 
