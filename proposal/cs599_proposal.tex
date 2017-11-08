@@ -94,10 +94,12 @@
     The discount factor $\gamma$ is 1 because future rewards are as important as current rewards.
     
     \subsection{Datasets}
+    \textbf{Stocks used:}
+    We are currently using 16 stocks from NASDAQ100 that we feel are representative of different sectors in the index fund. 
     \textbf{Price Data:}
-    We collected history price of 16 stocks from 2012-08-13 to 2017-08-11. The price on each day contains (open, high, low, close, volume). We use 2012-08-13 to 2015-08-12 as training data and 2015-08-13 to 2017-08-11 as testing data.\\
+    We collected history price of the stocks from 2012-08-13 to 2017-08-11. The price on each day contains (open, high, low, close, volume). We use 2012-08-13 to 2015-08-12 as training data and 2015-08-13 to 2017-08-11 as testing data.\\
     \textbf{News Data:}
-    
+    We have gathered all tweets referencing the stocks from 2016-03-28 to 2016-06-15. 
     \section{Methods}
     We consider both model-free and model-based approach. The main difference is that in model-based approach, we try to predict the open and close price of future timestamp before making actions. In model-free approach, we try to learn policy $\pi_{\theta}(a_t|s_t)$ directly from history data.
     \subsection{Deep Deterministic Policy Gradient}
@@ -105,13 +107,12 @@
     
     \subsection{Model-based Approach}
     \subsubsection{Price Prediction}
-    
+    Using pre-trained word embeddings from GloVe, we analyze sentiment from the tweets to determine a numerical effect of the tweets on the stock price. We combine this with some historical prices to build an LSTM to predict the next day's price. 
     \subsubsection{Planning}
-    
+    If we have a perfect predictor, then we can ignore risk and just pick the best stock for each day. We greedily choose the stock with the highest close/open ratio (taking into account trading cost of changing stocks), buying as much as possible on the open and selling all at the close. 
     \subsubsection{End-to-End training}
     
     \section{Results and Discussions}
-    
 %    
 %    \begin{figure}
 %      \centering
