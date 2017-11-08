@@ -64,6 +64,7 @@ class DDPG(object):
         self.sess.run(tf.global_variables_initializer())
 
     def train(self, save_every_episode=5, print_every_step=365, verbose=True, debug=False):
+        self.total_reward_stat = []
         np.random.seed(self.config['seed'])
         num_episode = self.config['episode']
         batch_size = self.config['batch size']
@@ -81,20 +82,20 @@ class DDPG(object):
                 loss = 0
                 action = self.predict(previous_observation, previous_action).squeeze(axis=0)
                 # add noise
-                # sigma = np.std(action, axis=0) * 100
-                # # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
-                # if verbose and self.env.src.step % print_every_step == 0 and debug:
-                #     print("Episode: {}, Action before: {}".format(i, action))
-                # noise = np.random.randn(*action.shape) * sigma
-                # if verbose and self.env.src.step % print_every_step == 0 and debug:
-                #     print("Episode: {}, Noise: {}".format(i, noise))
-                # action = action + noise
-                # action = np.clip(action, 0.0, 1.0)
-                # # if action is 0, assign one of them to 1.0 in case zero division
-                # if np.sum(action) == 0.0:
-                #     idx = np.random.randint(len(action))
-                #     action[idx] = 1.0
-                # action /= np.sum(action)
+                sigma = np.std(action, axis=0) * 100
+                # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
+                if verbose and self.env.src.step % print_every_step == 0 and debug:
+                    print("Episode: {}, Action before: {}".format(i, action))
+                noise = np.random.randn(*action.shape) * sigma
+                if verbose and self.env.src.step % print_every_step == 0 and debug:
+                    print("Episode: {}, Noise: {}".format(i, noise))
+                action = action + noise
+                action = np.clip(action, 0.0, 1.0)
+                # if action is 0, assign one of them to 1.0 in case zero division
+                if np.sum(action) == 0.0:
+                    idx = np.random.randint(len(action))
+                    action[idx] = 1.0
+                action /= np.sum(action)
                 if verbose and self.env.src.step % print_every_step == 0 and debug:
                     print("Episode: {}, Action after: {}".format(i, action))
 
@@ -146,6 +147,7 @@ class DDPG(object):
                 self.critic.target_model.save(self.critic_target_path)
 
             print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
+            self.total_reward_stat.append(total_reward)
 
         print('Finish.')
 
