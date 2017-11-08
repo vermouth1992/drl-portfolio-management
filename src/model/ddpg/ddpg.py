@@ -133,8 +133,8 @@ class DDPG(object):
 
             # save weights after every # of episodes
             if i % save_every_episode == 0:
-                self.actor.model.save_weights(self.actor_weights_path)
-                self.critic.model.save_weights(self.critic_weights_path)
+                self.actor.model.save(self.actor_weights_path)
+                self.critic.model.save(self.critic_weights_path)
 
             print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
 
