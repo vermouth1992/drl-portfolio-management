@@ -108,8 +108,10 @@
     
     \includegraphics[scale=0.5]{Optimal_with_trading_cost.png}
     
-    Then, we can do supervised imitation learning on this: we have as input the previous T observations and the previous action, and as output we have our next day's action. We will be using a CNN to do this. 
-    \subsubsection{Deep Deterministic Policy Gradient}
+    Then, we can train a model by imitating optimal action: we have as input the previous state $(o_t, a_{t-1})$, and as output label we compute to our next day's action. We will be using a CNN and LSTM to do this and compare the results. I believe this approach will yield good outcomes if the model can generalize to unseen data.
+    
+    \subsubsection{Deep Deterministic Policy Gradient (DDPG)}
+    We applied similar reinforcement learning algorithm for continuous action space in this paper~\cite{DBLP:journals/corr/LillicrapHPHETS15}. However, we don't have any promising results yet. The main issue is that the model doesn't seem to be training because the action the actor network produces are all equally distributed weights. e.g. $[0.25, 0.25, 0.25, 0.25]$ if we have 3 stocks plus cash. I want to take some time to debug the network by seeing how the network is updated by the gradient at each step. Also, a key part is the exploration noise we added when sample actions. Currently, I just use uncorrelated Gaussian noise and the result is very bad. I would like to try parameter noise mentioned here \cite{DBLP:journals/corr/PlappertHDSCCAA17}. 
     
     
     \subsection{Model-based Approach}
@@ -130,17 +132,17 @@
     \begin{itemize}
       \item Collect and preprocess stock price.
       \item Set up environment (OpenAI gym).
-      \item Train DDPG model.
+      \item Train DDPG model. (Doesn't work very well now, need to dig more)
     \end{itemize}
     \textbf{Corey Chen:}
     \begin{itemize}
       \item Compute optimal action
-      \item Train CNN and LSTM policy network using imitation learning.
+      \item Train CNN and LSTM policy network using imitation learning. (TODO)
     \end{itemize}
     \textbf{Limian Zhang:}
     \begin{itemize}
       \item Collect and preprocess tweets datasets.
-      \item Predict future stock price based on history price and tweets data
+      \item Predict future stock price based on history price and tweets data (TODO)
     \end{itemize}
     
     
@@ -155,7 +157,8 @@
     
   
   \end{spacing}  
-  \bibliographystyle{abbrv}
+
+  \bibliographystyle{IEEEtran}
   \bibliography{./bib/stock_prediction.bib}
 
 \end{document}
