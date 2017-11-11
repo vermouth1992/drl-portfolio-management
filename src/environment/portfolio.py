@@ -51,7 +51,7 @@ def max_drawdown(returns):
 class DataGenerator(object):
     """Acts as data provider for each new episode."""
 
-    def __init__(self, history, abbreviation, steps=730, window_length=50, start_date=None):
+    def __init__(self, history, abbreviation, steps=730, window_length=50, start_idx=0, start_date=None):
         """
 
         Args:
@@ -67,6 +67,7 @@ class DataGenerator(object):
 
         self.steps = steps + 1
         self.window_length = window_length
+        self.start_idx = start_idx
         self.start_date = start_date
 
         # make immutable class
@@ -95,7 +96,7 @@ class DataGenerator(object):
                 low=self.window_length, high=self._data.shape[1] - self.steps)
         else:
             # compute index corresponding to start_date for repeatable sequence
-            self.idx = date_to_index(self.start_date)
+            self.idx = date_to_index(self.start_date) - self.start_idx
             assert self.idx >= self.window_length and self.idx <= self._data.shape[1] - self.steps, \
                 'Invalid start date, must be window_length day after start date and simulation steps day before end date'
         # print('Start date: {}'.format(index_to_date(self.idx)))
@@ -207,7 +208,7 @@ class PortfolioEnv(gym.Env):
         self.num_stocks = history.shape[0]
         self.start_idx = start_idx
 
-        self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length,
+        self.src = DataGenerator(history, abbreviation, steps=steps, window_length=window_length, start_idx=start_idx,
                                  start_date=sample_start_date)
 
         self.sim = PortfolioSim(

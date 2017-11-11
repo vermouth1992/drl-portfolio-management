@@ -50,6 +50,7 @@ class DDPG(object):
                                   learning_rate=self.config['actor learning rate'])
         self.critic = CriticNetwork(self.sess, self.env.window_length, self.env.num_stocks, feature_size=1,
                                     tau=self.config['tau'], learning_rate=self.config['critic learning rate'])
+        self.sess.run(tf.global_variables_initializer())
         if load_weights:
             try:
                 self.actor.model.load_weights(self.actor_path)
@@ -62,7 +63,6 @@ class DDPG(object):
         else:
             print('Build model from scratch')
         self.buffer = ReplayBuffer(self.config['buffer size'])
-        self.sess.run(tf.global_variables_initializer())
 
     def train(self, save_every_episode=1, print_every_step=365, verbose=True, debug=False):
         self.total_reward_stat = []
@@ -159,14 +159,12 @@ class DDPG(object):
 
             # save weights after every # of episodes
             if i % save_every_episode == 0:
-                self.actor.model.save_weights(self.actor_path)
-                self.critic.model.save_weights(self.critic_path)
-                self.actor.target_model.save_weights(self.actor_target_path)
-                self.critic.target_model.save_weights(self.critic_target_path)
+                self.save_model()
 
             print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
             self.total_reward_stat.append(total_reward)
 
+        self.save_model()
         print('Finish.')
 
     def predict(self, observation, model='actor'):
@@ -204,3 +202,9 @@ class DDPG(object):
         # batch_size, num_stocks, window_length, feature_size = observation.shape
         # assert num_stocks == self.env.num_stocks + 1
         return self.critic.target_model.predict([observation, next_action])
+
+    def save_model(self):
+        self.actor.model.save_weights(self.actor_path)
+        self.critic.model.save_weights(self.critic_path)
+        self.actor.target_model.save_weights(self.actor_target_path)
+        self.critic.target_model.save_weights(self.critic_target_path)
