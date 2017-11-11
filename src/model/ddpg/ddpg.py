@@ -70,6 +70,8 @@ class DDPG(object):
         num_episode = self.config['episode']
         batch_size = self.config['batch size']
         gamma = self.config['gamma']
+        # use fixed exploration rate
+        exploration_rate = 0.3
         # main training loop
         for i in range(num_episode):
             if verbose and debug:
@@ -87,24 +89,29 @@ class DDPG(object):
             # keeps sampling until done
             while not done:
                 loss = 0
-                action = self.predict(previous_observation).squeeze(axis=0)
-                # add noise
-                sigma = np.std(action, axis=0) * 100
-                # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
+                explore = np.random.random_sample() < exploration_rate
+                if explore:
+                    action = self.env.action_space.sample()
+                    action /= np.sum(action)
+                else:
+                    action = self.predict(previous_observation).squeeze(axis=0)
+                # # add noise
+                # sigma = np.std(action, axis=0) * 100
+                # # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
+                # if verbose and self.env.src.step % print_every_step == 0 and debug:
+                #     print("Episode: {}, Action before: {}".format(i, action))
+                # noise = np.random.randn(*action.shape) * sigma
+                # if verbose and self.env.src.step % print_every_step == 0 and debug:
+                #     print("Episode: {}, Noise: {}".format(i, noise))
+                # action = action + noise
+                # action = np.clip(action, 0.0, 1.0)
+                # # if action is 0, assign one of them to 1.0 in case zero division
+                # if np.sum(action) == 0.0:
+                #     idx = np.random.randint(len(action))
+                #     action[idx] = 1.0
+                # action /= np.sum(action)
                 if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Action before: {}".format(i, action))
-                noise = np.random.randn(*action.shape) * sigma
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Noise: {}".format(i, noise))
-                action = action + noise
-                action = np.clip(action, 0.0, 1.0)
-                # if action is 0, assign one of them to 1.0 in case zero division
-                if np.sum(action) == 0.0:
-                    idx = np.random.randint(len(action))
-                    action[idx] = 1.0
-                action /= np.sum(action)
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Action after: {}".format(i, action))
+                    print("Episode: {}, Action: {}, Explore: {}".format(i, action, explore))
 
                 if debug:
                     if sys.version_info.major == 3:

@@ -1,5 +1,5 @@
 {
-  "episode": 4000,
+  "episode": 100,
   "buffer size": 100000,
   "batch size": 32,
   "tau": 0.001,
