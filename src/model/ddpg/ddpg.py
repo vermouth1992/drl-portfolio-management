@@ -64,7 +64,7 @@ class DDPG(object):
         self.buffer = ReplayBuffer(self.config['buffer size'])
         self.sess.run(tf.global_variables_initializer())
 
-    def train(self, save_every_episode=5, print_every_step=365, verbose=True, debug=False):
+    def train(self, save_every_episode=1, print_every_step=365, verbose=True, debug=False):
         self.total_reward_stat = []
         np.random.seed(self.config['seed'])
         num_episode = self.config['episode']
