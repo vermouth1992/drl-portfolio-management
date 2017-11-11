@@ -5,7 +5,7 @@ Basically, it evaluates the value of (current action, previous action and observ
 
 import tensorflow as tf
 
-from keras.layers import Input, Conv2D, Lambda, Dense
+from keras.layers import Input, Conv2D, Flatten, Dense
 from keras.models import Model
 from keras.optimizers import Adam
 
@@ -57,31 +57,28 @@ class CriticNetwork(object):
                               data_format='channels_last',
                               activation='relu', kernel_initializer='he_normal')(conv1_output)
 
-        previous_action_in = Input(shape=(self.num_stocks + 1,))
-        current_action_in = Input(shape=(self.num_stocks + 1,))
-
-        ExpandLayer = Lambda(lambda x: K.expand_dims(x))
-        # x is (N, num_stocks, 1, 22)
-        expanded_previous_action_in = ExpandLayer(ExpandLayer(previous_action_in))
-        expanded_current_action_in = ExpandLayer(ExpandLayer(current_action_in))
-        x = keras.layers.concatenate([conv2_output, expanded_previous_action_in, expanded_current_action_in])
-
-        # output is (N, num_stocks, 1, 1)
+        # output is (N, num_stocks + 1, 1, 1)
         output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                        activation='relu', kernel_initializer='he_normal')(x)
-        # output is (N, 17)
-        SqueezeLayer = Lambda(lambda x: K.squeeze(x, axis=-1))
-        output = SqueezeLayer(output)
-        output = SqueezeLayer(output)
+                        activation='relu', kernel_initializer='he_normal')(conv2_output)
+
+        output = Flatten()(output)
 
         # the final fc layer put all stocks feature together
+        ob_output = Dense(32, activation='linear')(output)
+
+        current_action_in = Input(shape=(self.num_stocks + 1,))
+
+        current_action_in_output = Dense(32, activation='linear')(current_action_in)
+
+        output = keras.layers.concatenate([ob_output, current_action_in_output], axis=-1)
+
         output = Dense(1, activation='linear')(output)
 
-        model = Model(inputs=[observation_in, previous_action_in, current_action_in], outputs=output)
+        model = Model(inputs=[observation_in, current_action_in], outputs=output)
 
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
 
-        return model, current_action_in, (observation_in, previous_action_in)
+        return model, current_action_in, observation_in
 
     def gradients(self, states, actions):
         return self.sess.run(self.action_grads, feed_dict={
@@ -95,3 +92,6 @@ class CriticNetwork(object):
         for i in range(len(critic_weights)):
             critic_target_weights[i] = self.tau * critic_weights[i] + (1 - self.tau) * critic_target_weights[i]
         self.target_model.set_weights(critic_target_weights)
+
+if __name__ == '__main__':
+    critic = CriticNetwork(tf.Session(), 50, 16)

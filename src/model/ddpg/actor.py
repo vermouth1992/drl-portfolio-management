@@ -5,7 +5,7 @@ https://arxiv.org/abs/1706.10059
 
 import tensorflow as tf
 
-from keras.layers import Input, Conv2D, Activation, Lambda
+from keras.layers import Input, Conv2D, Activation, Dense, Flatten
 from keras.models import Model
 
 import keras
@@ -58,25 +58,18 @@ class ActorNetwork(object):
                               data_format='channels_last',
                               activation='relu', kernel_initializer='he_normal')(conv1_output)
 
-        previous_action_in = Input(shape=(self.num_stocks + 1,))
-
-        ExpandLayer = Lambda(lambda x: K.expand_dims(x))
-        # x is (N, 17, 1, 21)
-        x = keras.layers.concatenate([conv2_output, ExpandLayer(ExpandLayer(previous_action_in))])
-
         # output is (N, 17, 1, 1)
         output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                        activation=None, kernel_initializer='he_normal')(x)
+                        activation='relu', kernel_initializer='he_normal')(conv2_output)
         # output is (N, 17)
-        SqueezeLayer = Lambda(lambda x: K.squeeze(x, axis=-1))
-        output = SqueezeLayer(output)
-        output = SqueezeLayer(output)
+        output = Flatten()(output)
+        output = Dense(self.num_stocks + 1)(output)
 
         output = Activation('softmax')(output)
 
-        model = Model(inputs=[observation_in, previous_action_in], outputs=output)
+        model = Model(inputs=observation_in, outputs=output)
 
-        return model, model.trainable_weights, (observation_in, previous_action_in)
+        return model, model.trainable_weights, observation_in
 
     def train(self, states, action_grads):
         """
