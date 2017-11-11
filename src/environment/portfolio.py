@@ -77,15 +77,15 @@ class DataGenerator(object):
     def _step(self):
         # get observation matrix from history, exclude volume, maybe volume is useful as it
         # indicates how market total investment changes. Normalize could be critical here
-        obs = self.data[:, self.step:self.step + self.window_length, :].copy()
-        num_stock, window_length, num_feature = obs.shape
-        # normalize obs with open price
-        first_day_open_price = obs[:, 0, 0]
-        obs /= first_day_open_price[:, np.newaxis, np.newaxis]
-
         self.step += 1
+        obs = self.data[:, self.step:self.step + self.window_length, :].copy()
+        # normalize obs with open price
+
+        # used for compute optimal action and sanity check
+        ground_truth_obs = self.data[:, self.step + self.window_length, :].copy()
+
         done = self.step >= self.steps
-        return obs, done
+        return obs, done, ground_truth_obs
 
     def reset(self):
         self.step = 0
@@ -103,6 +103,8 @@ class DataGenerator(object):
         data = self._data[:, self.idx - self.window_length:self.idx + self.steps + 1, :4]
         # apply augmentation?
         self.data = data
+        return self.data[:, self.step:self.step + self.window_length, :].copy(), \
+               self.data[:, self.step + self.window_length, :].copy()
 
 
 class PortfolioSim(object):
@@ -130,14 +132,13 @@ class PortfolioSim(object):
         assert w1.shape == y1.shape, 'w1 and y1 must have the same shape'
         assert y1[0] == 1.0, 'y1[0] must be 1'
 
-        w0 = self.w0
         p0 = self.p0
 
-        dw1 = (y1 * w0) / (np.dot(y1, w0) + eps)  # (eq7) weights evolve into
+        dw1 = (y1 * w1) / (np.dot(y1, w1) + eps)  # (eq7) weights evolve into
 
         mu1 = self.cost * (np.abs(dw1 - w1)).sum()  # (eq16) cost to change portfolio
 
-        p1 = p0 * (1 - mu1) * np.dot(y1, w0)  # (eq11) final portfolio value
+        p1 = p0 * (1 - mu1) * np.dot(y1, w1)  # (eq11) final portfolio value
 
         p1 = p1 * (1 - self.time_cost)  # we can add a cost to holding
 
@@ -147,7 +148,6 @@ class PortfolioSim(object):
         r1 = np.log((p1 + eps) / (p0 + eps))  # log rate of return
         reward = r1 / self.steps  # (22) average logarithmic accumulated return
         # remember for next step
-        self.w0 = w1
         self.p0 = p1
 
         # if we run out of money, we're done (losing all the money)
@@ -168,7 +168,6 @@ class PortfolioSim(object):
 
     def reset(self):
         self.infos = []
-        self.w0 = np.array([1.0] + [0.0] * len(self.asset_names))
         self.p0 = 1.0
 
 
@@ -250,7 +249,7 @@ class PortfolioEnv(gym.Env):
         np.testing.assert_almost_equal(
             np.sum(weights), 1.0, 3, err_msg='weights should sum to 1. action="%s"' % weights)
 
-        observation, done1 = self.src._step()
+        observation, done1, ground_truth_obs = self.src._step()
 
         # concatenate observation with ones
         cash_observation = np.ones((1, self.window_length, observation.shape[2]))
@@ -267,18 +266,19 @@ class PortfolioEnv(gym.Env):
         # add dates
         info['date'] = index_to_date(self.start_idx + self.src.idx + self.src.step)
         info['steps'] = self.src.step
+        info['next_obs'] = ground_truth_obs
 
         self.infos.append(info)
 
         return observation, reward, done1 or done2, info
 
     def _reset(self):
-        self.sim.reset()
-        self.src.reset()
         self.infos = []
-        action = self.sim.w0
-        observation, reward, done, info = self._step(action)
-        return observation, action
+        self.sim.reset()
+        observation, next_obs = self.src.reset()
+        info = {}
+        info['next_obs'] = next_obs
+        return observation, info
 
     def _render(self, mode='human', close=False):
         if close:
