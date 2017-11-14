@@ -25,6 +25,17 @@ target_list = ['AAPL', 'ATVI', 'CMCSA', 'COST', 'CSX', 'DISH', 'EA', 'EBAY', 'FB
                'MAR', 'REGN', 'SBUX']
 
 
+def normalize(x):
+    """ Create a universal normalization function across close/open ratio
+
+    Args:
+        x: input of any shape
+
+    Returns: normalized data
+
+    """
+    return (x - 1) * 100
+
 def create_dataset(filepath):
     """ create the raw dataset from all_stock_5yr.csv. The data is Open,High,Low,Close,Volume
 
@@ -184,18 +195,54 @@ def date_to_index(date_string):
     return (datetime.datetime.strptime(date_string, date_format) - start_datetime).days
 
 
-def compute_optimal_action(history):
-    """ Compute the optimal action in each timestamp. It requires no trading cost
+def create_optimal_imitation_dataset(history, training_data_ratio=0.8):
+    """ Create dataset for imitation optimal action given future observations
 
     Args:
-        history: numpy array of shape (num_stocks, T, num_features)
+        history: size of (num_stocks, T, num_features) contains (open, high, low, close)
+        training_data_ratio: the ratio of training data
 
-    Returns:
-        actions (T,): each one is a label to indicate which stock to choose, ranging from [0, num_stocks]
+    Returns: un-normalized close/open ratio with size (T, num_stocks), labels: (T,)
+             split the data according to training_data_ratio
 
     """
     num_stocks, T, num_features = history.shape
     cash_history = np.ones((1, T, num_features))
     history = np.concatenate((cash_history, history), axis=0)
+    close_open_ratio = np.transpose(history[:, :, 3] / history[:, :, 0])
+    labels = np.argmax(close_open_ratio, axis=1)
+    num_training_sample = int(T * training_data_ratio)
+    return (close_open_ratio[:num_training_sample], labels[:num_training_sample]), \
+           (close_open_ratio[num_training_sample:], labels[num_training_sample:])
 
 
+def create_imitation_dataset(history, window_length, training_data_ratio=0.8, is_normalize=True):
+    """
+
+    Args:
+        history: size of (num_stocks, T, num_features) contains (open, high, low, close)
+        window_length: length of window as feature
+        training_data_ratio: for splitting training data and validation data
+        is_normalize: whether to normalize the data
+
+    Returns: close/open ratio of size (num_samples, num_stocks, window_length)
+
+    """
+    num_stocks, T, num_features = history.shape
+    cash_history = np.ones((1, T, num_features))
+    history = np.concatenate((cash_history, history), axis=0)
+    close_open_ratio = history[:, :, 3] / history[:, :, 0]
+    if is_normalize:
+        close_open_ratio = normalize(close_open_ratio)
+    Xs = []
+    Ys = []
+    for i in range(window_length, T):
+        obs = close_open_ratio[:, i - window_length:i]
+        label = np.argmax(close_open_ratio[:, i:i+1], axis=0)
+        Xs.append(obs)
+        Ys.append(label)
+    Xs = np.stack(Xs)
+    Ys = np.concatenate(Ys)
+    num_training_sample = int(T * training_data_ratio)
+    return (Xs[:num_training_sample], Ys[:num_training_sample]), \
+           (Xs[num_training_sample:], Ys[num_training_sample:])
