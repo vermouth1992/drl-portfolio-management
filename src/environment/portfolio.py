@@ -82,7 +82,7 @@ class DataGenerator(object):
         # normalize obs with open price
 
         # used for compute optimal action and sanity check
-        ground_truth_obs = self.data[:, self.step + self.window_length, :].copy()
+        ground_truth_obs = self.data[:, self.step + self.window_length:self.step + self.window_length + 1, :].copy()
 
         done = self.step >= self.steps
         return obs, done, ground_truth_obs
@@ -104,7 +104,7 @@ class DataGenerator(object):
         # apply augmentation?
         self.data = data
         return self.data[:, self.step:self.step + self.window_length, :].copy(), \
-               self.data[:, self.step + self.window_length, :].copy()
+               self.data[:, self.step + self.window_length:self.step + self.window_length + 1, :].copy()
 
 
 class PortfolioSim(object):
@@ -255,6 +255,9 @@ class PortfolioEnv(gym.Env):
         cash_observation = np.ones((1, self.window_length, observation.shape[2]))
         observation = np.concatenate((cash_observation, observation), axis=0)
 
+        cash_ground_truth = np.ones((1, self.window_length, ground_truth_obs.shape[2]))
+        ground_truth_obs = np.concatenate((cash_ground_truth, ground_truth_obs), axis=0)
+
         # relative price vector of last observation day (close/open)
         close_price_vector = observation[:, -1, 3]
         open_price_vector = observation[:, -1, 0]
@@ -275,9 +278,13 @@ class PortfolioEnv(gym.Env):
     def _reset(self):
         self.infos = []
         self.sim.reset()
-        observation, next_obs = self.src.reset()
+        observation, ground_truth_obs = self.src.reset()
+        cash_observation = np.ones((1, self.window_length, observation.shape[2]))
+        observation = np.concatenate((cash_observation, observation), axis=0)
+        cash_ground_truth = np.ones((1, self.window_length, ground_truth_obs.shape[2]))
+        ground_truth_obs = np.concatenate((cash_ground_truth, ground_truth_obs), axis=0)
         info = {}
-        info['next_obs'] = next_obs
+        info['next_obs'] = ground_truth_obs
         return observation, info
 
     def _render(self, mode='human', close=False):

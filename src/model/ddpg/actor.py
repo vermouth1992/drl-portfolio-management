@@ -51,18 +51,24 @@ class ActorNetwork(object):
         observation_in = Input(shape=(self.num_stocks + 1, self.window_length, self.feature_size),
                                dtype='float32', name='observation_input')
 
-        conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
-                              activation='relu', kernel_initializer='he_normal')(observation_in)
+        if self.window_length > 1:
+            conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
+                                  activation='relu', kernel_initializer='he_normal')(observation_in)
 
-        conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
-                              data_format='channels_last',
-                              activation='relu', kernel_initializer='he_normal')(conv1_output)
+            conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
+                                  data_format='channels_last',
+                                  activation='relu', kernel_initializer='he_normal')(conv1_output)
 
-        # output is (N, 17, 1, 1)
-        output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                        activation='relu', kernel_initializer='he_normal')(conv2_output)
-        # output is (N, 17)
-        output = Flatten()(output)
+            # output is (N, 17, 1, 1)
+            output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
+                            activation='relu', kernel_initializer='he_normal')(conv2_output)
+            # output is (N, 17)
+            output = Flatten()(output)
+        else:
+            output = Flatten()(observation_in)
+            output = Dense(512, activation='relu')(output)
+            output = Dense(512, activation='relu')(output)
+
         output = Dense(self.num_stocks + 1)(output)
 
         output = Activation('softmax')(output)

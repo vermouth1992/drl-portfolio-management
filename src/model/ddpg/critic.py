@@ -50,25 +50,30 @@ class CriticNetwork(object):
         observation_in = Input(shape=(self.num_stocks + 1, self.window_length, self.feature_size),
                                dtype='float32', name='observation_input')
 
-        conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
-                              activation='relu', kernel_initializer='he_normal')(observation_in)
+        if self.window_length > 1:
 
-        conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
-                              data_format='channels_last',
-                              activation='relu', kernel_initializer='he_normal')(conv1_output)
+            conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
+                                  activation='relu', kernel_initializer='he_normal')(observation_in)
 
-        # output is (N, num_stocks + 1, 1, 1)
-        output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                        activation='relu', kernel_initializer='he_normal')(conv2_output)
+            conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
+                                  data_format='channels_last',
+                                  activation='relu', kernel_initializer='he_normal')(conv1_output)
 
-        output = Flatten()(output)
+            # output is (N, num_stocks + 1, 1, 1)
+            output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
+                            activation='relu', kernel_initializer='he_normal')(conv2_output)
+
+            output = Flatten()(output)
+
+        else:
+            output = Flatten()(observation_in)
 
         # the final fc layer put all stocks feature together
-        ob_output = Dense(32, activation='linear')(output)
+        ob_output = Dense(32, activation='relu')(output)
 
         current_action_in = Input(shape=(self.num_stocks + 1,))
 
-        current_action_in_output = Dense(32, activation='linear')(current_action_in)
+        current_action_in_output = Dense(32, activation='relu')(current_action_in)
 
         output = keras.layers.concatenate([ob_output, current_action_in_output], axis=-1)
 

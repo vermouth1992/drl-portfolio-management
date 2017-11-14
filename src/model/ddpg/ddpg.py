@@ -13,6 +13,20 @@ from .actor import ActorNetwork
 from .critic import CriticNetwork
 from .replay_buffer import ReplayBuffer
 
+
+def process_observation(observation):
+    """
+
+    Args:
+        observation: (num_stocks + 1, window_length, 4)
+
+    Returns: normalized close/open
+
+    """
+    observation = (observation[:, :, 3] / observation[:, :, 0] - 1.0) / 0.5
+    return np.expand_dims(observation, axis=-1)
+
+
 class DDPG(object):
     def __init__(self, env=None, config_file='config/default.json',
                  actor_path='weights/actor_default.h5',
@@ -71,18 +85,20 @@ class DDPG(object):
         batch_size = self.config['batch size']
         gamma = self.config['gamma']
         # use fixed exploration rate
-        exploration_rate = 0.3
+        exploration_rate = 0.2
         # main training loop
         for i in range(num_episode):
             if verbose and debug:
                 print("Episode: " + str(i) + " Replay Buffer " + str(self.buffer.count()))
 
-            previous_observation, previous_action = self.env.reset()
+            previous_observation, info = self.env.reset()
 
             # observation is close/open
-            previous_observation = previous_observation[:, :, 3] / previous_observation[:, :, 1]
+            # previous_observation = process_observation(previous_observation)
 
-            previous_observation = np.expand_dims(previous_observation, axis=-1)
+            # directly feed in current obs for sanity check. Ideally, actor should be argmax function
+            previous_observation = info['next_obs']
+            previous_observation = process_observation(previous_observation)
 
             total_reward = 0
             done = False
@@ -123,36 +139,38 @@ class DDPG(object):
                     input_method('Press any key to continue...')
 
                 # step forward
-                observation, reward, done, _ = self.env.step(action)
+                observation, reward, done, info = self.env.step(action)
 
-                observation = observation[:, :, 3] / observation[:, :, 0]
-
-                observation = np.expand_dims(observation, axis=-1)
+                observation = info['next_obs']
+                observation = process_observation(observation)
 
                 # add to buffer
-                self.buffer.add(previous_observation, previous_action, reward, observation, done)
-                # batch update
-                batch = self.buffer.getBatch(batch_size)
-                old_observations = np.asarray([e[0] for e in batch])
-                old_actions = np.asarray([e[1] for e in batch])
-                rewards = np.asarray([e[2] for e in batch])
-                new_observations = np.asarray([e[3] for e in batch])
-                dones = np.asarray([e[4] for e in batch])
+                self.buffer.add(previous_observation, action, reward, observation, done)
 
-                target_q_values = self.evaluate_q(new_observations,
-                                                  self.predict(new_observations, model='target'))
-                target_q_values = np.squeeze(target_q_values, axis=1)
-                y_t = rewards + gamma * target_q_values * dones
+                if self.buffer.count() >= batch_size:
+                    # batch update
+                    batch = self.buffer.getBatch(batch_size)
+                    old_observations = np.asarray([e[0] for e in batch])
+                    old_actions = np.asarray([e[1] for e in batch])
+                    rewards = np.asarray([e[2] for e in batch])
+                    new_observations = np.asarray([e[3] for e in batch])
+                    dones = np.asarray([e[4] for e in batch])
 
-                loss += self.critic.model.train_on_batch([old_observations, old_actions], y_t)
-                a_for_grad = self.predict(old_observations)
-                grads = self.critic.gradients(old_observations, a_for_grad)
-                self.actor.train(old_observations, grads)
-                self.actor.target_train()
-                self.critic.target_train()
+                    target_q_values = self.evaluate_q(new_observations,
+                                                      self.predict(new_observations, model='target'))
+                    target_q_values = np.squeeze(target_q_values, axis=1)
+                    y_t = rewards + gamma * target_q_values * dones
+
+                    loss += self.critic.model.train_on_batch([old_observations, old_actions], y_t)
+                    a_for_grad = self.predict(old_observations)
+                    grads = self.critic.gradients(old_observations, a_for_grad)
+                    self.actor.train(old_observations, grads)
+                    self.actor.target_train()
+                    self.critic.target_train()
 
                 total_reward += reward
-                previous_observation, previous_action = observation, action
+
+                previous_observation = observation
 
                 if verbose and self.env.src.step % print_every_step == 0 and debug:
                     print("Episode:", i, "Step:", self.env.src.step, "Reward:", reward, "Loss:", loss)
@@ -198,9 +216,6 @@ class DDPG(object):
         Returns: a scalar evaluation of the current Q state
 
         """
-        # assert observation.ndim == 4 and previous_action.ndim == 2 and next_action.ndim == 2
-        # batch_size, num_stocks, window_length, feature_size = observation.shape
-        # assert num_stocks == self.env.num_stocks + 1
         return self.critic.target_model.predict([observation, next_action])
 
     def save_model(self):
