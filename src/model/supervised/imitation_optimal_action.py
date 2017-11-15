@@ -1,7 +1,7 @@
 """
 Train a classifier given optimal action
 """
-from utils.data import read_stock_history, create_optimal_imitation_dataset, create_imitation_dataset
+from utils.data import create_optimal_imitation_dataset, create_imitation_dataset
 
 import numpy as np
 
@@ -10,22 +10,8 @@ from keras.models import Sequential
 from keras.optimizers import Adam
 from keras.utils import np_utils
 
-# dataset
-history, abbreviation = read_stock_history(filepath='utils/datasets/stocks_history_target.h5')
-history = history[:, :, :4]
-target_stocks = ['AAPL', 'CMCSA', 'REGN']
-target_history = np.empty(shape=(len(target_stocks), history.shape[1], history.shape[2]))
-for i, stock in enumerate(target_stocks):
-    target_history[i] = history[abbreviation.index(stock), :, :]
 
-# test on 3 never seen stocks
-test_stocks = ['GOOGL', 'DISH', 'ILMN']
-test_history = np.empty(shape=(len(test_stocks), history.shape[1], history.shape[2]))
-for i, stock in enumerate(test_stocks):
-    test_history[i] = history[abbreviation.index(stock), :, :]
-
-
-def create_network_given_future(nb_classes):
+def create_network_given_future(nb_classes, weight_path='weights/optimal_3_stocks.h5'):
     model = Sequential()
     model.add(Dense(256, input_shape=(nb_classes,)))
     model.add(Activation('relu'))
@@ -38,14 +24,18 @@ def create_network_given_future(nb_classes):
     model.compile(loss='categorical_crossentropy',
                   optimizer=Adam(lr=1e-3),
                   metrics=['accuracy'])
+    try:
+        model.load_weights(weight_path)
+        print('Model load successfully')
+    except:
+        print('Build model from scratch')
     return model
 
 
-def train_optimal_action_given_future_obs(target_history, target_stocks):
+def train_optimal_action_given_future_obs(model, target_history, target_stocks,
+                                          weight_path='weights/optimal_3_stocks.h5'):
     (X_train, y_train), (X_test, y_test) = create_optimal_imitation_dataset(target_history)
-
     nb_classes = len(target_stocks) + 1
-
     # normalize the input
     X_train = (X_train - 1) * 100
     X_test = (X_test - 1) * 100
@@ -53,12 +43,16 @@ def train_optimal_action_given_future_obs(target_history, target_stocks):
     Y_train = np_utils.to_categorical(y_train, nb_classes)
     Y_test = np_utils.to_categorical(y_test, nb_classes)
 
-    model = create_network_given_future(nb_classes)
-    model.fit(X_train, Y_train, batch_size=128, epochs=100, validation_data=(X_test, Y_test), shuffle=True)
-    return model
+    continue_train = True
+    while continue_train:
+        model.fit(X_train, Y_train, batch_size=128, epochs=20, validation_data=(X_test, Y_test), shuffle=True)
+        save_weights = input('Type True to save weights\n')
+        if save_weights:
+            model.save_weights(weight_path)
+        continue_train = input('True to continue train, otherwise stop\n')
 
 
-def create_network_give_past(nb_classes, window_length):
+def create_network_give_past(nb_classes, window_length, weight_path='weights/imitation_3_stocks.h5'):
     model = Sequential()
     model.add(Conv2D(filters=32, kernel_size=(1, 3), input_shape=(nb_classes, window_length, 1),
                      activation='relu'))
@@ -75,30 +69,27 @@ def create_network_give_past(nb_classes, window_length):
     model.compile(loss='categorical_crossentropy',
                   optimizer=Adam(lr=1e-3),
                   metrics=['accuracy'])
+    try:
+        model.load_weights(weight_path)
+        print('Model load successfully')
+    except:
+        print('Build model from scratch')
     return model
 
 
-def train_optimal_action_given_history_obs(target_history, target_stocks, window_length):
+def train_optimal_action_given_history_obs(model, target_history, target_stocks, window_length,
+                                           weight_path='weights/imitation_3_stocks.h5'):
     nb_classes = len(target_stocks) + 1
     (X_train, y_train), (X_validation, y_validation) = create_imitation_dataset(target_history, window_length)
     Y_train = np_utils.to_categorical(y_train, nb_classes)
     Y_validation = np_utils.to_categorical(y_validation, nb_classes)
-    model = create_network_give_past(nb_classes, window_length)
     X_train = np.expand_dims(X_train, axis=-1)
     X_validation = np.expand_dims(X_validation, axis=-1)
     continue_train = True
     while continue_train:
         model.fit(X_train, Y_train, batch_size=128, epochs=100, validation_data=(X_validation, Y_validation),
                   shuffle=True)
+        save_weights = input('Type True to save weights\n')
+        if save_weights:
+            model.save_weights(weight_path)
         continue_train = input("True to continue train, otherwise stop training...\n")
-    return model
-
-
-if __name__ == '__main__':
-    # optimal_given_future = train_optimal_action_given_future_obs(target_history, target_stocks)
-    optimal_given_history_model = train_optimal_action_given_history_obs(target_history, target_stocks, 3)
-    (X_test, y_test), (_, _) = create_imitation_dataset(test_history, 3)
-    Y_test = np_utils.to_categorical(y_test, 4)
-    X_test = np.expand_dims(X_test, axis=-1)
-    loss, acc = optimal_given_history_model.evaluate(X_test, Y_test)
-    print('Testing result: loss - {}, accuracy - {}'.format(loss, acc))

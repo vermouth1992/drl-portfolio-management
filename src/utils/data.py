@@ -195,7 +195,7 @@ def date_to_index(date_string):
     return (datetime.datetime.strptime(date_string, date_format) - start_datetime).days
 
 
-def create_optimal_imitation_dataset(history, training_data_ratio=0.8):
+def create_optimal_imitation_dataset(history, training_data_ratio=0.8, is_normalize=True):
     """ Create dataset for imitation optimal action given future observations
 
     Args:
@@ -210,6 +210,8 @@ def create_optimal_imitation_dataset(history, training_data_ratio=0.8):
     cash_history = np.ones((1, T, num_features))
     history = np.concatenate((cash_history, history), axis=0)
     close_open_ratio = np.transpose(history[:, :, 3] / history[:, :, 0])
+    if is_normalize:
+        close_open_ratio = normalize(close_open_ratio)
     labels = np.argmax(close_open_ratio, axis=1)
     num_training_sample = int(T * training_data_ratio)
     return (close_open_ratio[:num_training_sample], labels[:num_training_sample]), \
@@ -217,7 +219,7 @@ def create_optimal_imitation_dataset(history, training_data_ratio=0.8):
 
 
 def create_imitation_dataset(history, window_length, training_data_ratio=0.8, is_normalize=True):
-    """
+    """ Create dataset for imitation optimal action given past observations
 
     Args:
         history: size of (num_stocks, T, num_features) contains (open, high, low, close)

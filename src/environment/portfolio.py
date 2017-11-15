@@ -255,7 +255,7 @@ class PortfolioEnv(gym.Env):
         cash_observation = np.ones((1, self.window_length, observation.shape[2]))
         observation = np.concatenate((cash_observation, observation), axis=0)
 
-        cash_ground_truth = np.ones((1, self.window_length, ground_truth_obs.shape[2]))
+        cash_ground_truth = np.ones((1, 1, ground_truth_obs.shape[2]))
         ground_truth_obs = np.concatenate((cash_ground_truth, ground_truth_obs), axis=0)
 
         # relative price vector of last observation day (close/open)
@@ -281,7 +281,7 @@ class PortfolioEnv(gym.Env):
         observation, ground_truth_obs = self.src.reset()
         cash_observation = np.ones((1, self.window_length, observation.shape[2]))
         observation = np.concatenate((cash_observation, observation), axis=0)
-        cash_ground_truth = np.ones((1, self.window_length, ground_truth_obs.shape[2]))
+        cash_ground_truth = np.ones((1, 1, ground_truth_obs.shape[2]))
         ground_truth_obs = np.concatenate((cash_ground_truth, ground_truth_obs), axis=0)
         info = {}
         info['next_obs'] = ground_truth_obs
