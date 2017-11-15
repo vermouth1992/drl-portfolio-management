@@ -36,9 +36,6 @@ def train_optimal_action_given_future_obs(model, target_history, target_stocks,
                                           weight_path='weights/optimal_3_stocks.h5'):
     (X_train, y_train), (X_test, y_test) = create_optimal_imitation_dataset(target_history)
     nb_classes = len(target_stocks) + 1
-    # normalize the input
-    X_train = (X_train - 1) * 100
-    X_test = (X_test - 1) * 100
 
     Y_train = np_utils.to_categorical(y_train, nb_classes)
     Y_test = np_utils.to_categorical(y_test, nb_classes)
