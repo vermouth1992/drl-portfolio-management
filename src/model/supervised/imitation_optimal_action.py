@@ -13,10 +13,10 @@ from keras.utils import np_utils
 
 def create_network_given_future(nb_classes, weight_path='weights/optimal_3_stocks.h5'):
     model = Sequential()
-    model.add(Dense(256, input_shape=(nb_classes,)))
+    model.add(Dense(512, input_shape=(nb_classes,)))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(256))
+    model.add(Dense(512))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))

@@ -14,7 +14,7 @@ from .critic import CriticNetwork
 from .replay_buffer import ReplayBuffer
 
 
-def process_observation(observation):
+def normalize_observation(observation):
     """
 
     Args:
@@ -98,7 +98,7 @@ class DDPG(object):
 
             # directly feed in current obs for sanity check. Ideally, actor should be argmax function
             previous_observation = info['next_obs']
-            previous_observation = process_observation(previous_observation)
+            previous_observation = normalize_observation(previous_observation)
 
             total_reward = 0
             done = False
@@ -142,7 +142,7 @@ class DDPG(object):
                 observation, reward, done, info = self.env.step(action)
 
                 observation = info['next_obs']
-                observation = process_observation(observation)
+                observation = normalize_observation(observation)
 
                 # add to buffer
                 self.buffer.add(previous_observation, action, reward, observation, done)

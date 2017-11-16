@@ -14,38 +14,32 @@ import gym.spaces
 
 from utils.data import date_to_index, index_to_date
 
-eps = 1e-7
+eps = 1e-8
 
 
 def random_shift(x, fraction):
-    """Apply a random shift to a pandas series."""
+    """ Apply a random shift to a pandas series. """
     min_x, max_x = np.min(x), np.max(x)
     m = np.random.uniform(-fraction, fraction, size=x.shape) + 1
     return np.clip(x * m, min_x, max_x)
 
 
-def normalize(x):
-    """Normalize to a pandas series."""
-    x = (x - x.mean()) / (x.std() + eps)
-    return x
-
-
 def scale_to_start(x):
-    """Scale pandas series so that it starts at one."""
+    """ Scale pandas series so that it starts at one. """
     x = (x + eps) / (x[0] + eps)
     return x
 
 
 def sharpe(returns, freq=30, rfr=0):
-    """Given a set of returns, calculates naive (rfr=0) sharpe (eq 28)."""
+    """ Given a set of returns, calculates naive (rfr=0) sharpe (eq 28). """
     return (np.sqrt(freq) * np.mean(returns - rfr + eps)) / np.std(returns - rfr + eps)
 
 
 def max_drawdown(returns):
-    """Max drawdown."""
+    """ Max drawdown. See https://www.investopedia.com/terms/m/maximum-drawdown-mdd.asp """
     peak = returns.max()
     trough = returns[returns.argmax():].min()
-    return (trough - peak) / (trough + eps)
+    return (trough - peak) / (peak + eps)
 
 
 class DataGenerator(object):
