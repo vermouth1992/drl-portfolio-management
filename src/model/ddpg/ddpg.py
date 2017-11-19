@@ -14,212 +14,176 @@ from .critic import CriticNetwork
 from .replay_buffer import ReplayBuffer
 
 
-def normalize_observation(observation):
-    """
+def build_summaries():
+    episode_reward = tf.Variable(0.)
+    tf.summary.scalar("Reward", episode_reward)
+    episode_ave_max_q = tf.Variable(0.)
+    tf.summary.scalar("Qmax_Value", episode_ave_max_q)
 
-    Args:
-        observation: (num_stocks + 1, window_length, 4)
+    summary_vars = [episode_reward, episode_ave_max_q]
+    summary_ops = tf.summary.merge_all()
 
-    Returns: normalized close/open
-
-    """
-    observation = (observation[:, :, 3] / observation[:, :, 0] - 1.0) / 0.5
-    return np.expand_dims(observation, axis=-1)
+    return summary_ops, summary_vars
 
 
 class DDPG(object):
-    def __init__(self, env=None, config_file='config/default.json',
-                 actor_path='weights/actor_default.h5',
-                 critic_path='weights/critic_default.h5',
-                 actor_target_path='weights/actor_target_default.h5',
-                 critic_target_path='weights/critic_target_default.h5'):
+    def __init__(self, env, sess, actor, critic, actor_noise, obs_normalizer=None, action_processor=None,
+                 config_file='config/default.json',
+                 model_save_path='weights/ddpg/ddpg.ckpt', summary_path='results/ddpg/'):
         with open(config_file) as f:
             self.config = json.load(f)
         assert self.config != None, "Can't load config file"
-        self.actor_path = actor_path
-        self.critic_path = critic_path
-        self.actor_target_path = actor_target_path
-        self.critic_target_path = critic_target_path
-        tf_config = tf.ConfigProto()
-        tf_config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=tf_config)
-        from keras import backend as K
-        K.set_session(self.sess)
-
+        np.random.seed(self.config['seed'])
+        if env:
+            env.seed(self.config['seed'])
+        self.model_save_path = model_save_path
+        self.summary_path = summary_path
+        self.sess = sess
         # if env is None, then DDPG just predicts
         self.env = env
+        self.actor = actor
+        self.critic = critic
+        self.actor_noise = actor_noise
+        self.obs_normalizer = obs_normalizer
+        self.action_processor = action_processor
+        self.summary_ops, self.summary_vars = build_summaries()
 
-    def build_model(self, load_weights=True):
-        """ Load training history from path
+    def initialize(self, load_weights=True, verbose=True):
+        """ Load training history from path. To be add feature to just load weights, not training states
+
+        """
+        if load_weights:
+            try:
+                variables = tf.global_variables()
+                param_dict = {}
+                saver = tf.train.Saver()
+                saver.restore(self.sess, self.model_save_path)
+                for var in variables:
+                    var_name = var.name[:-2]
+                    if verbose:
+                        print('Loading {} from checkpoint. Name: {}'.format(var.name, var_name))
+                    param_dict[var_name] = var
+            except:
+                print('Build model from scratch')
+                self.sess.run(tf.global_variables_initializer())
+        else:
+            print('Build model from scratch')
+            self.sess.run(tf.global_variables_initializer())
+
+    def train(self, save_every_episode=1, verbose=True, debug=False):
+        """ Must already call intialize
 
         Args:
-            load_weights (Bool): True to resume training from file or just deploying.
-                                 Otherwise, training from scratch.
+            save_every_episode:
+            print_every_step:
+            verbose:
+            debug:
 
         Returns:
 
         """
-        self.actor = ActorNetwork(self.sess, self.env.window_length, self.env.num_stocks, feature_size=1,
-                                  tau=self.config['tau'],
-                                  learning_rate=self.config['actor learning rate'])
-        self.critic = CriticNetwork(self.sess, self.env.window_length, self.env.num_stocks, feature_size=1,
-                                    tau=self.config['tau'], learning_rate=self.config['critic learning rate'])
-        self.sess.run(tf.global_variables_initializer())
-        if load_weights:
-            try:
-                self.actor.model.load_weights(self.actor_path)
-                self.critic.model.load_weights(self.critic_path)
-                self.actor.target_model.load_weights(self.actor_path)
-                self.critic.target_model.load_weights(self.critic_path)
-                print('Model load successfully')
-            except:
-                print('Build model from scratch')
-        else:
-            print('Build model from scratch')
-        self.buffer = ReplayBuffer(self.config['buffer size'])
+        writer = tf.summary.FileWriter(self.summary_path, self.sess.graph)
 
-    def train(self, save_every_episode=1, print_every_step=365, verbose=True, debug=False):
-        self.total_reward_stat = []
+        self.actor.update_target_network()
+        self.critic.update_target_network()
+
         np.random.seed(self.config['seed'])
         num_episode = self.config['episode']
         batch_size = self.config['batch size']
         gamma = self.config['gamma']
-        # use fixed exploration rate
-        exploration_rate = 0.2
+        self.buffer = ReplayBuffer(self.config['buffer size'])
+
         # main training loop
         for i in range(num_episode):
             if verbose and debug:
                 print("Episode: " + str(i) + " Replay Buffer " + str(self.buffer.count()))
 
-            previous_observation, info = self.env.reset()
+            previous_observation = self.env.reset()
+            if self.obs_normalizer:
+                previous_observation = self.obs_normalizer(previous_observation)
 
-            # observation is close/open
-            # previous_observation = process_observation(previous_observation)
-
-            # directly feed in current obs for sanity check. Ideally, actor should be argmax function
-            previous_observation = info['next_obs']
-            previous_observation = normalize_observation(previous_observation)
-
-            total_reward = 0
-            done = False
+            ep_reward = 0
+            ep_ave_max_q = 0
             # keeps sampling until done
-            while not done:
-                loss = 0
-                explore = np.random.random_sample() < exploration_rate
-                if explore:
-                    action = self.env.action_space.sample()
-                    action /= np.sum(action)
+            for j in range(self.config['max step']):
+
+                action = self.actor.predict(np.expand_dims(previous_observation, axis=0)).squeeze(axis=0) + self.actor_noise()
+
+                if self.action_processor:
+                    action_take = self.action_processor(action)
                 else:
-                    action = self.predict(previous_observation).squeeze(axis=0)
-                # # add noise
-                # sigma = np.std(action, axis=0) * 100
-                # # noise = OrnsteinUhlenbeck.function(action, 1.0 / self.env.num_stocks, 1.0, 0.1)
-                # if verbose and self.env.src.step % print_every_step == 0 and debug:
-                #     print("Episode: {}, Action before: {}".format(i, action))
-                # noise = np.random.randn(*action.shape) * sigma
-                # if verbose and self.env.src.step % print_every_step == 0 and debug:
-                #     print("Episode: {}, Noise: {}".format(i, noise))
-                # action = action + noise
-                # action = np.clip(action, 0.0, 1.0)
-                # # if action is 0, assign one of them to 1.0 in case zero division
-                # if np.sum(action) == 0.0:
-                #     idx = np.random.randint(len(action))
-                #     action[idx] = 1.0
-                # action /= np.sum(action)
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode: {}, Action: {}, Explore: {}".format(i, action, explore))
-
-                if debug:
-                    if sys.version_info.major == 3:
-                        input_method = input
-                    elif sys.version_info.major == 2:
-                        input_method = raw_input
-                    else:
-                        raise ValueError('Unknown Python Version')
-                    input_method('Press any key to continue...')
-
+                    action_take = action
                 # step forward
-                observation, reward, done, info = self.env.step(action)
+                observation, reward, done, _ = self.env.step(action_take)
 
-                observation = info['next_obs']
-                observation = normalize_observation(observation)
+                if self.obs_normalizer:
+                    observation = self.obs_normalizer
 
                 # add to buffer
-                self.buffer.add(previous_observation, action, reward, observation, done)
+                self.buffer.add(previous_observation, action, reward, done, observation)
 
-                if self.buffer.count() >= batch_size:
+                if self.buffer.size() >= batch_size:
                     # batch update
-                    batch = self.buffer.getBatch(batch_size)
-                    old_observations = np.asarray([e[0] for e in batch])
-                    old_actions = np.asarray([e[1] for e in batch])
-                    rewards = np.asarray([e[2] for e in batch])
-                    new_observations = np.asarray([e[3] for e in batch])
-                    dones = np.asarray([e[4] for e in batch])
+                    s_batch, a_batch, r_batch, t_batch, s2_batch = self.buffer.sample_batch(batch_size)
+                    # Calculate targets
+                    target_q = self.critic.predict_target(s2_batch, self.actor.predict_target(s2_batch))
 
-                    target_q_values = self.evaluate_q(new_observations,
-                                                      self.predict(new_observations, model='target'))
-                    target_q_values = np.squeeze(target_q_values, axis=1)
-                    y_t = rewards + gamma * target_q_values * dones
+                    y_i = []
+                    for k in range(batch_size):
+                        if t_batch[k]:
+                            y_i.append(r_batch[k])
+                        else:
+                            y_i.append(r_batch[k] + gamma * target_q[k])
 
-                    loss += self.critic.model.train_on_batch([old_observations, old_actions], y_t)
-                    a_for_grad = self.predict(old_observations)
-                    grads = self.critic.gradients(old_observations, a_for_grad)
-                    self.actor.train(old_observations, grads)
-                    self.actor.target_train()
-                    self.critic.target_train()
+                    # Update the critic given the targets
+                    predicted_q_value, _ = self.critic.train(
+                        s_batch, a_batch, np.reshape(y_i, (batch_size, 1)))
 
-                total_reward += reward
+                    ep_ave_max_q += np.amax(predicted_q_value)
 
+                    # Update the actor policy using the sampled gradient
+                    a_outs = self.actor.predict(s_batch)
+                    grads = self.critic.action_gradients(s_batch, a_outs)
+                    self.actor.train(s_batch, grads[0])
+
+                    # Update target networks
+                    self.actor.update_target_network()
+                    self.critic.update_target_network()
+
+                ep_reward += reward
                 previous_observation = observation
 
-                if verbose and self.env.src.step % print_every_step == 0 and debug:
-                    print("Episode:", i, "Step:", self.env.src.step, "Reward:", reward, "Loss:", loss)
+                if done:
+                    summary_str = self.sess.run(self.summary_ops, feed_dict={
+                        self.summary_vars[0]: ep_reward,
+                        self.summary_vars[1]: ep_ave_max_q / float(j)
+                    })
 
-            # save weights after every # of episodes
-            if i % save_every_episode == 0:
-                self.save_model()
+                    writer.add_summary(summary_str, i)
+                    writer.flush()
 
-            print("Total Reward @ {}-th Episode: {}".format(i, total_reward))
-            self.total_reward_stat.append(total_reward)
+                    print('Episode: {:d}, Reward: {:.2f}, Qmax: {:.4f}'.format(i, ep_reward, (ep_ave_max_q / float(j))))
+                    break
 
-        self.save_model()
+        self.save_model(verbose=True)
         print('Finish.')
 
-    def predict(self, observation, model='actor'):
-        """ predict the next action using actor model
-
-        Args:
-            observation: (batch_size, num_stocks + 1, window_length, 4)
-            previous_action: (batch_size, num_stocks + 1)
-            model: actor or target
-
-        Returns: next_action: (batch_size, num_stocks + 1)
+    def predict(self, observation):
+        """ predict the next action using actor model, only used in deploy
 
         """
-        if observation.ndim == 3:
-            observation = np.expand_dims(observation, axis=0)
-        if model == 'actor':
-            return self.actor.model.predict(observation)
-        elif model == 'target':
-            return self.actor.target_model.predict(observation)
-        else:
-            raise ValueError('Unknown model')
+        action = self.actor.predict(observation).squeeze(axis=0)
+        if self.action_processor:
+            action = self.action_processor(action)
+        return action
 
-    def evaluate_q(self, observation, next_action):
-        """ only call on target critic network
+    def predict_single(self, observation):
+        action = self.actor.predict(np.expand_dims(observation, axis=0)).squeeze(axis=0)
+        if self.action_processor:
+            action = self.action_processor(action)
+        return action
 
-        Args:
-            observation: (batch_size, num_stocks + 1, window_length, 4)
-            previous_action: (batch_size, num_stocks + 1)
-            next_action: (batch_size, num_stocks + 1)
-
-        Returns: a scalar evaluation of the current Q state
-
-        """
-        return self.critic.target_model.predict([observation, next_action])
-
-    def save_model(self):
-        self.actor.model.save_weights(self.actor_path)
-        self.critic.model.save_weights(self.critic_path)
-        self.actor.target_model.save_weights(self.actor_target_path)
-        self.critic.target_model.save_weights(self.critic_target_path)
+    def save_model(self, verbose=False):
+        saver = tf.train.Saver()
+        model_path = saver.save(self.sess, self.model_save_path)
+        print("Model saved in %s" % model_path)

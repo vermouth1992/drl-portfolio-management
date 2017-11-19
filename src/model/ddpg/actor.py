@@ -1,102 +1,102 @@
 """
 Actor Network definition, The CNN architecture follows the one in this paper
 https://arxiv.org/abs/1706.10059
+Author: Patrick Emami, Modified by Chi Zhang
 """
 
 import tensorflow as tf
+import tflearn
 
-from keras.layers import Input, Conv2D, Activation, Dense, Flatten
-from keras.models import Model
 
-import keras
-import keras.backend as K
-
+# ===========================
+#   Actor DNNs
+# ===========================
 
 class ActorNetwork(object):
-    def __init__(self, sess, window_length, num_stocks, feature_size=4, tau=1e-3, learning_rate=1e-4):
-        """
+    """
+    Input to the network is the state, output is the action
+    under a deterministic policy.
+    The output layer activation is a tanh to keep the action
+    between -action_bound and action_bound
+    """
 
-        Args:
-            sess: tensorflow session
-            window_length: length of observation window
-            num_stocks: number of stocks, not include cash
-            feature_size: (open, high, low, close)
-            tau: target network update parameter
-            learning_rate: learning rate
-        """
+    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size):
         self.sess = sess
-        self.window_length = window_length
-        self.num_stocks = num_stocks
-        self.feature_size = feature_size
-        self.tau = tau
+        self.s_dim = state_dim
+        self.a_dim = action_dim
+        self.action_bound = action_bound
         self.learning_rate = learning_rate
+        self.tau = tau
+        self.batch_size = batch_size
 
-        K.set_session(sess)
+        # Actor Network
+        self.inputs, self.out, self.scaled_out = self.create_actor_network()
 
-        # Now create the model
-        self.model, self.weights, self.state = self.create_actor_network()
-        self.target_model, self.target_weights, self.target_state = self.create_actor_network()
-        self.action_gradient = tf.placeholder(tf.float32, [None, self.num_stocks + 1])
-        self.params_grad = tf.gradients(self.model.output, self.weights, -self.action_gradient)
-        grads = zip(self.params_grad, self.weights)
-        self.optimize = tf.train.AdamOptimizer(learning_rate).apply_gradients(grads)
+        self.network_params = tf.trainable_variables()
+
+        # Target Network
+        self.target_inputs, self.target_out, self.target_scaled_out = self.create_actor_network()
+
+        self.target_network_params = tf.trainable_variables()[
+                                     len(self.network_params):]
+
+        # Op for periodically updating target network with online network
+        # weights
+        self.update_target_network_params = \
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
+                                                  tf.multiply(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
+
+        # This gradient will be provided by the critic network
+        self.action_gradient = tf.placeholder(tf.float32, [None, self.a_dim])
+
+        # Combine the gradients here
+        self.unnormalized_actor_gradients = tf.gradients(
+            self.scaled_out, self.network_params, -self.action_gradient)
+        self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
+
+        # Optimization Op
+        self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
+            apply_gradients(zip(self.actor_gradients, self.network_params))
+
+        self.num_trainable_vars = len(
+            self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self):
-        """ Create actor network.
-        Topology: (N, 17, 50, 4) -> (N, 17, 48, 10) -> (N, 17, 1, 20) -> (N, 17, 1, 21) -> (N, 17) -> softmax
+        raise NotImplementedError('Create actor should return (inputs, out, scaled_out)')
+        # inputs = tflearn.input_data(shape=[None, self.s_dim])
+        # net = tflearn.fully_connected(inputs, 400)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+        # net = tflearn.fully_connected(net, 300)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+        # # Final layer weights are init to Uniform[-3e-3, 3e-3]
+        # w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+        # out = tflearn.fully_connected(
+        #     net, self.a_dim, activation='softmax', weights_init=w_init)
+        # # Scale output to -action_bound to action_bound
+        # scaled_out = tf.multiply(out, self.action_bound)
+        # return inputs, out, scaled_out
 
-        Returns: actor network
-
-        """
-        observation_in = Input(shape=(self.num_stocks + 1, self.window_length, self.feature_size),
-                               dtype='float32', name='observation_input')
-
-        if self.window_length > 1:
-            conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
-                                  activation='relu', kernel_initializer='he_normal')(observation_in)
-
-            conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
-                                  data_format='channels_last',
-                                  activation='relu', kernel_initializer='he_normal')(conv1_output)
-
-            # output is (N, 17, 1, 1)
-            output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                            activation='relu', kernel_initializer='he_normal')(conv2_output)
-            # output is (N, 17)
-            output = Flatten()(output)
-        else:
-            output = Flatten()(observation_in)
-            output = Dense(512, activation='relu')(output)
-            output = Dense(512, activation='relu')(output)
-
-        output = Dense(self.num_stocks + 1)(output)
-
-        output = Activation('softmax')(output)
-
-        model = Model(inputs=observation_in, outputs=output)
-
-        return model, model.trainable_weights, observation_in
-
-    def train(self, states, action_grads):
-        """
-
-        Args:
-            states: (observation, previous_action),
-                    observation is (N, num_stocks, window_length, 4), previous_action is (N, 17)
-            action_grads: (N, 17)
-        """
+    def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={
-            self.state: states,
-            self.action_gradient: action_grads
+            self.inputs: inputs,
+            self.action_gradient: a_gradient
         })
 
-    def target_train(self):
-        actor_weights = self.model.get_weights()
-        actor_target_weights = self.target_model.get_weights()
-        for i in range(len(actor_weights)):
-            actor_target_weights[i] = self.tau * actor_weights[i] + (1 - self.tau) * actor_target_weights[i]
-        self.target_model.set_weights(actor_target_weights)
+    def predict(self, inputs):
+        return self.sess.run(self.scaled_out, feed_dict={
+            self.inputs: inputs
+        })
 
+    def predict_target(self, inputs):
+        return self.sess.run(self.target_scaled_out, feed_dict={
+            self.target_inputs: inputs
+        })
 
-if __name__ == '__main__':
-    actor = ActorNetwork(tf.Session(), 50, 16)
+    def update_target_network(self):
+        self.sess.run(self.update_target_network_params)
+
+    def get_num_trainable_vars(self):
+        return self.num_trainable_vars

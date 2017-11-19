@@ -4,99 +4,101 @@ Basically, it evaluates the value of (current action, previous action and observ
 """
 
 import tensorflow as tf
-
-from keras.layers import Input, Conv2D, Flatten, Dense
-from keras.models import Model
-from keras.optimizers import Adam
-
-import keras
-import keras.backend as K
-
+import tflearn
 
 class CriticNetwork(object):
-    def __init__(self, sess, window_length, num_stocks, feature_size=4, tau=1e-3, learning_rate=1e-4):
-        """
+    """
+    Input to the network is the state and action, output is Q(s,a).
+    The action must be obtained from the output of the Actor network.
+    """
 
-        Args:
-            sess: a tensorflow session
-            window_length: window length
-            num_stocks: number of stocks to trade, not include cash
-            feature_size: open, high, low, close
-            tau: target network update parameter
-            learning_rate: learning rate
-        """
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars):
         self.sess = sess
-        self.window_length = window_length
-        self.num_stocks = num_stocks
-        self.feature_size = feature_size
-        self.tau = tau
+        self.s_dim = state_dim
+        self.a_dim = action_dim
         self.learning_rate = learning_rate
+        self.tau = tau
 
-        K.set_session(sess)
+        # Create the critic network
+        self.inputs, self.action, self.out = self.create_critic_network()
 
-        # create model
-        self.model, self.action, self.state = self.create_critic_network()
-        self.target_model, self.target_action, self.target_state = self.create_critic_network()
-        self.action_grads = tf.gradients(self.model.output, self.action)  # GRADIENTS for policy update
+        self.network_params = tf.trainable_variables()[num_actor_vars:]
+
+        # Target Network
+        self.target_inputs, self.target_action, self.target_out = self.create_critic_network()
+
+        self.target_network_params = tf.trainable_variables()[(len(self.network_params) + num_actor_vars):]
+
+        # Op for periodically updating target network with online network
+        # weights with regularization
+        self.update_target_network_params = \
+            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) \
+                                                  + tf.multiply(self.target_network_params[i], 1. - self.tau))
+             for i in range(len(self.target_network_params))]
+
+        # Network target (y_i)
+        self.predicted_q_value = tf.placeholder(tf.float32, [None, 1])
+
+        # Define loss and optimization Op
+        self.loss = tflearn.mean_square(self.predicted_q_value, self.out)
+        self.optimize = tf.train.AdamOptimizer(
+            self.learning_rate).minimize(self.loss)
+
+        # Get the gradient of the net w.r.t. the action.
+        # For each action in the minibatch (i.e., for each x in xs),
+        # this will sum up the gradients of each critic output in the minibatch
+        # w.r.t. that action. Each output is independent of all
+        # actions except for one.
+        self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self):
-        """
-        Topology: Similar to actor network. Instead just taking previous_action_in, it also takes
-                  current_action_in.
+        raise NotImplementedError('Create critic should return (inputs, action, out)')
+        # inputs = tflearn.input_data(shape=[None, self.s_dim])
+        # action = tflearn.input_data(shape=[None, self.a_dim])
+        # net = tflearn.fully_connected(inputs, 256)
+        # net = tflearn.layers.normalization.batch_normalization(net)
+        # net = tflearn.activations.relu(net)
+        #
+        # # Add the action tensor in the 2nd hidden layer
+        # # Use two temp layers to get the corresponding weights and biases
+        # t1 = tflearn.fully_connected(net, 256)
+        # t2 = tflearn.fully_connected(action, 256)
+        #
+        # # net = tflearn.activation(
+        # #     tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
+        # net = tf.add(t1, t2)
+        # net = tflearn.activations.relu(net)
+        #
+        # # linear layer connected to 1 output representing Q(s,a)
+        # # Weights are init to Uniform[-3e-3, 3e-3]
+        # w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
+        # out = tflearn.fully_connected(net, 1, weights_init=w_init)
+        # return inputs, action, out
 
-        Returns:
+    def train(self, inputs, action, predicted_q_value):
+        return self.sess.run([self.out, self.optimize], feed_dict={
+            self.inputs: inputs,
+            self.action: action,
+            self.predicted_q_value: predicted_q_value
+        })
 
-        """
-        observation_in = Input(shape=(self.num_stocks + 1, self.window_length, self.feature_size),
-                               dtype='float32', name='observation_input')
+    def predict(self, inputs, action):
+        return self.sess.run(self.out, feed_dict={
+            self.inputs: inputs,
+            self.action: action
+        })
 
-        if self.window_length > 1:
+    def predict_target(self, inputs, action):
+        return self.sess.run(self.target_out, feed_dict={
+            self.target_inputs: inputs,
+            self.target_action: action
+        })
 
-            conv1_output = Conv2D(10, (1, 3), strides=(1, 1), padding='valid', data_format='channels_last',
-                                  activation='relu', kernel_initializer='he_normal')(observation_in)
-
-            conv2_output = Conv2D(20, (1, self.window_length - 2), strides=(1, 1), padding='valid',
-                                  data_format='channels_last',
-                                  activation='relu', kernel_initializer='he_normal')(conv1_output)
-
-            # output is (N, num_stocks + 1, 1, 1)
-            output = Conv2D(1, (1, 1), strides=(1, 1), padding='valid', data_format='channels_last',
-                            activation='relu', kernel_initializer='he_normal')(conv2_output)
-
-            output = Flatten()(output)
-
-        else:
-            output = Flatten()(observation_in)
-
-        # the final fc layer put all stocks feature together
-        ob_output = Dense(32, activation='relu')(output)
-
-        current_action_in = Input(shape=(self.num_stocks + 1,))
-
-        current_action_in_output = Dense(32, activation='relu')(current_action_in)
-
-        output = keras.layers.concatenate([ob_output, current_action_in_output], axis=-1)
-
-        output = Dense(1, activation='linear')(output)
-
-        model = Model(inputs=[observation_in, current_action_in], outputs=output)
-
-        model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
-
-        return model, current_action_in, observation_in
-
-    def gradients(self, states, actions):
+    def action_gradients(self, inputs, actions):
         return self.sess.run(self.action_grads, feed_dict={
-            self.state: states,
+            self.inputs: inputs,
             self.action: actions
-        })[0]
+        })
 
-    def target_train(self):
-        critic_weights = self.model.get_weights()
-        critic_target_weights = self.target_model.get_weights()
-        for i in range(len(critic_weights)):
-            critic_target_weights[i] = self.tau * critic_weights[i] + (1 - self.tau) * critic_target_weights[i]
-        self.target_model.set_weights(critic_target_weights)
-
-if __name__ == '__main__':
-    critic = CriticNetwork(tf.Session(), 50, 16)
+    def update_target_network(self):
+        self.sess.run(self.update_target_network_params)

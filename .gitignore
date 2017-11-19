@@ -1,3 +1,5 @@
+results/
+weights/
 *.npz
 *.csv
 *.h5

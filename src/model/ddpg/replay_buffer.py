@@ -1,41 +1,47 @@
 """
-Source: https://github.com/yanpanlau/DDPG-Keras-Torcs/blob/master/ReplayBuffer.py
+Source: https://github.com/vermouth1992/deep-learning-playground/blob/master/tensorflow/ddpg/replay_buffer.py
 """
-
 from collections import deque
 import random
+import numpy as np
 
 
 class ReplayBuffer(object):
-    def __init__(self, buffer_size):
+    def __init__(self, buffer_size, random_seed=123):
+        """
+        The right side of the deque contains the most recent experiences
+        """
         self.buffer_size = buffer_size
-        self.num_experiences = 0
+        self.count = 0
         self.buffer = deque()
+        random.seed(random_seed)
 
-    def getBatch(self, batch_size):
-        # Randomly sample batch_size examples
-        if self.num_experiences < batch_size:
-            return random.sample(self.buffer, self.num_experiences)
-        else:
-            return random.sample(self.buffer, batch_size)
-
-    def size(self):
-        return self.buffer_size
-
-    def add(self, state, action, reward, new_state, done):
-        experience = (state, action, reward, new_state, done)
-        if self.num_experiences < self.buffer_size:
+    def add(self, s, a, r, t, s2):
+        experience = (s, a, r, t, s2)
+        if self.count < self.buffer_size:
             self.buffer.append(experience)
-            self.num_experiences += 1
+            self.count += 1
         else:
             self.buffer.popleft()
             self.buffer.append(experience)
 
-    def count(self):
-        # if buffer is full, return buffer size
-        # otherwise, return experience counter
-        return self.num_experiences
+    def size(self):
+        return self.count
 
-    def erase(self):
-        self.buffer = deque()
-        self.num_experiences = 0
+    def sample_batch(self, batch_size):
+        if self.count < batch_size:
+            batch = random.sample(self.buffer, self.count)
+        else:
+            batch = random.sample(self.buffer, batch_size)
+
+        s_batch = np.array([_[0] for _ in batch])
+        a_batch = np.array([_[1] for _ in batch])
+        r_batch = np.array([_[2] for _ in batch])
+        t_batch = np.array([_[3] for _ in batch])
+        s2_batch = np.array([_[4] for _ in batch])
+
+        return s_batch, a_batch, r_batch, t_batch, s2_batch
+
+    def clear(self):
+        self.buffer.clear()
+        self.count = 0

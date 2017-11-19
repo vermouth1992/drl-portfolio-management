@@ -1,7 +1,8 @@
 {
-  "episode": 100,
+  "episode": 2000,
+  "max step": 1000,
   "buffer size": 100000,
-  "batch size": 32,
+  "batch size": 64,
   "tau": 0.001,
   "gamma": 1.0,
   "actor learning rate": 1e-4,
