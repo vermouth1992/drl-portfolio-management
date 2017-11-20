@@ -14,7 +14,7 @@ import tflearn
 import tensorflow as tf
 import gym
 
-class CartPoleActor(ActorNetwork):
+class PendulumActor(ActorNetwork):
     def create_actor_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim], name='input')
         net = tflearn.fully_connected(inputs, 400)
@@ -32,7 +32,7 @@ class CartPoleActor(ActorNetwork):
         return inputs, out, scaled_out
 
 
-class CartPoleCritic(CriticNetwork):
+class PendulumCritic(CriticNetwork):
     def create_critic_network(self):
         inputs = tflearn.input_data(shape=[None, self.s_dim])
         action = tflearn.input_data(shape=[None, self.a_dim])
@@ -76,15 +76,15 @@ def test_model(env, model, num_test, render=False):
 
 
 if __name__ == '__main__':
-    sess = tf.Session()
     env = gym.make('Pendulum-v0')
-    action_dim = 1
-    state_dim = 3
+    sess = tf.Session()
+    action_dim = [1]
+    state_dim = [3]
     batch_size = 64
     action_bound = 2.
     tau = 1e-3
-    actor = CartPoleActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size)
-    critic = CartPoleCritic(sess=sess, state_dim=state_dim, action_dim=action_dim, tau=1e-3,
+    actor = PendulumActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size)
+    critic = PendulumCritic(sess=sess, state_dim=state_dim, action_dim=action_dim, tau=1e-3,
                             learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars())
     actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 

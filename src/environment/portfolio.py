@@ -140,7 +140,7 @@ class PortfolioSim(object):
 
         rho1 = p1 / p0 - 1  # rate of returns
         r1 = np.log((p1 + eps) / (p0 + eps))  # log rate of return
-        reward = r1 / self.steps  # (22) average logarithmic accumulated return
+        reward = r1 / self.steps * 1000.  # (22) average logarithmic accumulated return
         # remember for next step
         self.p0 = p1
 

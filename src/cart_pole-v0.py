@@ -76,8 +76,8 @@ def test_model(env, model, num_test):
 if __name__ == '__main__':
     sess = tf.Session()
     env = gym.make('CartPole-v0')
-    action_dim = 2
-    state_dim = 4
+    action_dim = [2]
+    state_dim = [4]
     batch_size = 64
     tau = 1e-3
     actor = CartPoleActor(sess, state_dim, action_dim, 1., 1e-4, tau, batch_size)

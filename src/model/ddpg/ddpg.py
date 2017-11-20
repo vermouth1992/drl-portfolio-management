@@ -106,8 +106,8 @@ class DDPG(object):
             ep_ave_max_q = 0
             # keeps sampling until done
             for j in range(self.config['max step']):
-
-                action = self.actor.predict(np.expand_dims(previous_observation, axis=0)).squeeze(axis=0) + self.actor_noise()
+                action = self.actor.predict(np.expand_dims(previous_observation, axis=0)).squeeze(
+                    axis=0) + self.actor_noise()
 
                 if self.action_processor:
                     action_take = self.action_processor(action)
@@ -117,7 +117,7 @@ class DDPG(object):
                 observation, reward, done, _ = self.env.step(action_take)
 
                 if self.obs_normalizer:
-                    observation = self.obs_normalizer
+                    observation = self.obs_normalizer(observation)
 
                 # add to buffer
                 self.buffer.add(previous_observation, action, reward, done, observation)
@@ -153,7 +153,7 @@ class DDPG(object):
                 ep_reward += reward
                 previous_observation = observation
 
-                if done:
+                if done or j == self.config['max step'] - 1:
                     summary_str = self.sess.run(self.summary_ops, feed_dict={
                         self.summary_vars[0]: ep_reward,
                         self.summary_vars[1]: ep_ave_max_q / float(j)
@@ -172,12 +172,16 @@ class DDPG(object):
         """ predict the next action using actor model, only used in deploy
 
         """
+        if self.obs_normalizer:
+            observation = self.obs_normalizer(observation)
         action = self.actor.predict(observation).squeeze(axis=0)
         if self.action_processor:
             action = self.action_processor(action)
         return action
 
     def predict_single(self, observation):
+        if self.obs_normalizer:
+            observation = self.obs_normalizer(observation)
         action = self.actor.predict(np.expand_dims(observation, axis=0)).squeeze(axis=0)
         if self.action_processor:
             action = self.action_processor(action)

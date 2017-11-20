@@ -14,7 +14,9 @@ class CriticNetwork(object):
 
     def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars):
         self.sess = sess
+        assert isinstance(state_dim, list), 'state_dim must be a list.'
         self.s_dim = state_dim
+        assert isinstance(action_dim, list), 'action_dim must be a list.'
         self.a_dim = action_dim
         self.learning_rate = learning_rate
         self.tau = tau
