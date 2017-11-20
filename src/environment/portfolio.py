@@ -136,8 +136,6 @@ class PortfolioSim(object):
 
         p1 = p1 * (1 - self.time_cost)  # we can add a cost to holding
 
-        p1 = np.clip(p1, 0, np.inf)
-
         rho1 = p1 / p0 - 1  # rate of returns
         r1 = np.log((p1 + eps) / (p0 + eps))  # log rate of return
         reward = r1 / self.steps * 1000.  # (22) average logarithmic accumulated return
