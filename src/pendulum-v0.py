@@ -77,7 +77,7 @@ def test_model(env, model, num_test, render=False):
 
 if __name__ == '__main__':
     sess = tf.Session()
-    env = gym.make('CartPole-v0')
+    env = gym.make('Pendulum-v0')
     action_dim = 1
     state_dim = 3
     batch_size = 64
@@ -91,5 +91,5 @@ if __name__ == '__main__':
     ddpg_model = DDPG(env, sess, actor, critic, actor_noise, action_processor=None, config_file='config/pendulum.json',
                           model_save_path='weights/pendulum/checkpoint.ckpt', summary_path='results/pendulum/')
     ddpg_model.initialize(load_weights=True)
-    ddpg_model.train()
+    # ddpg_model.train()
     test_model(env, ddpg_model, 10)
