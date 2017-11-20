@@ -132,6 +132,8 @@ class PortfolioSim(object):
 
         mu1 = self.cost * (np.abs(dw1 - w1)).sum()  # (eq16) cost to change portfolio
 
+        assert mu1 < 1.0, 'Cost is larger than current holding'
+
         p1 = p0 * (1 - mu1) * np.dot(y1, w1)  # (eq11) final portfolio value
 
         p1 = p1 * (1 - self.time_cost)  # we can add a cost to holding
