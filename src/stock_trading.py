@@ -87,11 +87,19 @@ def obs_normalizer(observation):
     return observation
 
 
+def test_model(env, model):
+    observation, info = env.reset()
+    done = False
+    while not done:
+        action = ddpg_model.predict_single(observation)
+        observation, _, done, _ = env.step(action)
+    env.render()
+
 if __name__ == '__main__':
     history, abbreviation = read_stock_history(filepath='utils/datasets/stocks_history_target.h5')
     history = history[:, :, :4]
-    target_stocks = ['AAPL', 'COST', 'DISH']
-    num_training_time = history.shape[1]
+    target_stocks = abbreviation
+    num_training_time = 1095
     window_length = 3
     nb_classes = len(target_stocks) + 1
 
@@ -101,7 +109,7 @@ if __name__ == '__main__':
         target_history[i] = history[abbreviation.index(stock), :num_training_time, :]
 
     # setup environment
-    env = PortfolioEnv(target_history, target_stocks, steps=1500, window_length=window_length)
+    env = PortfolioEnv(target_history, target_stocks, steps=1000, window_length=window_length)
 
     sess = tf.Session()
     action_dim = [nb_classes]
