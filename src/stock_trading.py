@@ -16,7 +16,7 @@ import tensorflow as tf
 from environment.portfolio import PortfolioEnv
 from utils.data import read_stock_history, normalize
 
-DEBUG = True
+DEBUG = False
 
 
 def get_model_path(window_length, predictor_type, use_batch_norm):
@@ -160,7 +160,7 @@ def test_model(env, model):
     observation, info = env.reset()
     done = False
     while not done:
-        action = ddpg_model.predict_single(observation)
+        action = model.predict_single(observation)
         observation, _, done, _ = env.step(action)
     env.render()
 
