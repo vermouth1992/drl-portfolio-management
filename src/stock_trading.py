@@ -12,10 +12,47 @@ from model.ddpg.ornstein_uhlenbeck import OrnsteinUhlenbeckActionNoise
 import numpy as np
 import tflearn
 import tensorflow as tf
-import gym
 
 from environment.portfolio import PortfolioEnv
 from utils.data import read_stock_history, normalize
+
+predictor_type = 'cnn'
+
+DEBUG = False
+
+def stock_predictor(inputs, window_length):
+    assert predictor_type in ['cnn', 'lstm'], 'type must be either cnn or lstm'
+    if predictor_type == 'cnn':
+        net = tflearn.conv_2d(inputs, 32, (1, 3), padding='valid')
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+        net = tflearn.conv_2d(net, 32, (1, window_length - 2), padding='valid')
+        net = tflearn.layers.normalization.batch_normalization(net)
+        net = tflearn.activations.relu(net)
+        if DEBUG:
+            print('After conv2d:', net.shape)
+        net = tflearn.flatten(net)
+        if DEBUG:
+            print('Output:', net.shape)
+    elif predictor_type == 'lstm':
+        num_stocks = inputs.get_shape()[1]
+        hidden_dim = 32
+        net = tflearn.reshape(inputs, new_shape=[-1, window_length, 1])
+        if DEBUG:
+            print('Reshaped input:', net.shape)
+        net = tflearn.lstm(net, hidden_dim)
+        if DEBUG:
+            print('After LSTM:', net.shape)
+        net = tflearn.reshape(net, new_shape=[-1, num_stocks, hidden_dim])
+        if DEBUG:
+            print('After reshape:', net.shape)
+        net = tflearn.flatten(net)
+        if DEBUG:
+            print('Output:', net.shape)
+    else:
+        raise NotImplementedError
+
+    return net
 
 
 class StockActor(ActorNetwork):
@@ -27,9 +64,9 @@ class StockActor(ActorNetwork):
         assert nb_classes == self.a_dim[0]
         assert window_length > 2, 'This architecture only support window length larger than 2.'
         inputs = tflearn.input_data(shape=[None] + self.s_dim + [1], name='input')
-        net = tflearn.conv_2d(inputs, 32, (1, 3), padding='valid', activation='relu')
-        net = tflearn.conv_2d(net, 32, (1, window_length - 2), padding='valid', activation='relu')
-        net = tflearn.flatten(net)
+
+        net = stock_predictor(inputs, window_length)
+
         net = tflearn.fully_connected(net, 64)
         # net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -49,9 +86,8 @@ class StockCritic(CriticNetwork):
         nb_classes, window_length = self.s_dim
         inputs = tflearn.input_data(shape=[None] + self.s_dim + [1])
         action = tflearn.input_data(shape=[None] + self.a_dim)
-        net = tflearn.conv_2d(inputs, 32, (1, 3), padding='valid', activation='relu')
-        net = tflearn.conv_2d(net, 32, (1, window_length - 2), padding='valid', activation='relu')
-        net = tflearn.flatten(net)
+
+        net = stock_predictor(inputs, window_length)
 
         # Add the action tensor in the 2nd hidden layer
         # Use two temp layers to get the corresponding weights and biases
@@ -95,6 +131,7 @@ def test_model(env, model):
         observation, _, done, _ = env.step(action)
     env.render()
 
+
 if __name__ == '__main__':
     history, abbreviation = read_stock_history(filepath='utils/datasets/stocks_history_target.h5')
     history = history[:, :, :4]
@@ -122,8 +159,11 @@ if __name__ == '__main__':
                          learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars())
     actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
+    model_save_path = 'weights/stock/{}/checkpoint.ckpt'.format(predictor_type)
+    summary_path = 'results/stock/{}/'.format(predictor_type)
+
     ddpg_model = DDPG(env, sess, actor, critic, actor_noise, obs_normalizer=obs_normalizer,
-                      config_file='config/stock.json', model_save_path='weights/stock/checkpoint.ckpt',
-                      summary_path='results/stock/')
+                      config_file='config/stock.json', model_save_path=model_save_path,
+                      summary_path=summary_path)
     ddpg_model.initialize(load_weights=False)
-    ddpg_model.train()
+    # ddpg_model.train()
