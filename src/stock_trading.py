@@ -21,6 +21,23 @@ predictor_type = 'cnn'
 DEBUG = False
 use_batch_norm = True
 
+
+def get_model_path(window_length):
+    if use_batch_norm:
+        batch_norm_str = 'batch_norm'
+    else:
+        batch_norm_str = 'no_batch_norm'
+    return 'weights/stock/{}/window_{}/{}/checkpoint.ckpt'.format(predictor_type, window_length, batch_norm_str)
+
+
+def get_result_path(window_length):
+    if use_batch_norm:
+        batch_norm_str = 'batch_norm'
+    else:
+        batch_norm_str = 'no_batch_norm'
+    return 'results/stock/{}/window_{}/{}/'.format(predictor_type, window_length, batch_norm_str)
+
+
 def stock_predictor(inputs, window_length):
     assert predictor_type in ['cnn', 'lstm'], 'type must be either cnn or lstm'
     if predictor_type == 'cnn':
@@ -166,8 +183,8 @@ if __name__ == '__main__':
                          learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars())
     actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
-    model_save_path = 'weights/stock/{}/checkpoint.ckpt'.format(predictor_type)
-    summary_path = 'results/stock/{}/'.format(predictor_type)
+    model_save_path = get_model_path(window_length)
+    summary_path = get_result_path(window_length)
 
     ddpg_model = DDPG(env, sess, actor, critic, actor_noise, obs_normalizer=obs_normalizer,
                       config_file='config/stock.json', model_save_path=model_save_path,
