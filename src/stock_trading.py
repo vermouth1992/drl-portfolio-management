@@ -9,15 +9,14 @@ from model.ddpg.critic import CriticNetwork
 from model.ddpg.ddpg import DDPG
 from model.ddpg.ornstein_uhlenbeck import OrnsteinUhlenbeckActionNoise
 
-import numpy as np
-import tflearn
-import tensorflow as tf
-
 from environment.portfolio import PortfolioEnv
 from utils.data import read_stock_history, normalize
 
-DEBUG = False
-
+import numpy as np
+import tflearn
+import tensorflow as tf
+import argparse
+import pprint
 
 def get_model_path(window_length, predictor_type, use_batch_norm):
     if use_batch_norm:
@@ -33,6 +32,14 @@ def get_result_path(window_length, predictor_type, use_batch_norm):
     else:
         batch_norm_str = 'no_batch_norm'
     return 'results/stock/{}/window_{}/{}/'.format(predictor_type, window_length, batch_norm_str)
+
+
+def get_variable_scope(window_length, predictor_type, use_batch_norm):
+    if use_batch_norm:
+        batch_norm_str = 'batch_norm'
+    else:
+        batch_norm_str = 'no_batch_norm'
+    return '{}_window_{}_{}'.format(predictor_type, window_length, batch_norm_str)
 
 
 def stock_predictor(inputs, predictor_type, use_batch_norm):
@@ -166,11 +173,29 @@ def test_model(env, model):
 
 
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description='Provide arguments for training different DDPG models')
+
+    parser.add_argument('--debug', '-d', help='print debug statement', default=False)
+    parser.add_argument('--predictor_type', '-p', help='cnn or lstm predictor', required=True)
+    parser.add_argument('--window_length', '-w', help='observation window length', required=True)
+    parser.add_argument('--batch_norm', '-b', help='whether to use batch normalization', required=True)
+
+    args = vars(parser.parse_args())
+
+    pprint.pprint(args)
+
+    global DEBUG
+    if args['debug'] == 'True':
+        DEBUG = True
+    else:
+        DEBUG = False
+
     history, abbreviation = read_stock_history(filepath='utils/datasets/stocks_history_target.h5')
     history = history[:, :, :4]
     target_stocks = abbreviation
     num_training_time = 1095
-    window_length = 3
+    window_length = int(args['window_length'])
     nb_classes = len(target_stocks) + 1
 
     # get target history
@@ -181,26 +206,34 @@ if __name__ == '__main__':
     # setup environment
     env = PortfolioEnv(target_history, target_stocks, steps=1000, window_length=window_length)
 
-    sess = tf.Session()
     action_dim = [nb_classes]
     state_dim = [nb_classes, window_length]
     batch_size = 64
     action_bound = 1.
     tau = 1e-3
-    predictor_type = 'lstm'
-    use_batch_norm = True
-    actor = StockActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size,
-                       predictor_type, use_batch_norm)
-    critic = StockCritic(sess=sess, state_dim=state_dim, action_dim=action_dim, tau=1e-3,
-                         learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars(),
-                         predictor_type=predictor_type, use_batch_norm=use_batch_norm)
+    assert args['predictor_type'] in ['cnn', 'lstm'], 'Predictor must be either cnn or lstm'
+    predictor_type = args['predictor_type']
+    if args['batch_norm'] == 'True':
+        use_batch_norm = True
+    elif args['batch_norm'] == 'False':
+        use_batch_norm = False
+    else:
+        raise ValueError('Unknown batch norm argument')
     actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
-
     model_save_path = get_model_path(window_length, predictor_type, use_batch_norm)
     summary_path = get_result_path(window_length, predictor_type, use_batch_norm)
 
-    ddpg_model = DDPG(env, sess, actor, critic, actor_noise, obs_normalizer=obs_normalizer,
-                      config_file='config/stock.json', model_save_path=model_save_path,
-                      summary_path=summary_path)
-    ddpg_model.initialize(load_weights=False)
-    # ddpg_model.train()
+    variable_scope = get_variable_scope(window_length, predictor_type, use_batch_norm)
+
+    with tf.variable_scope(variable_scope):
+        sess = tf.Session()
+        actor = StockActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size,
+                           predictor_type, use_batch_norm)
+        critic = StockCritic(sess=sess, state_dim=state_dim, action_dim=action_dim, tau=1e-3,
+                             learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars(),
+                             predictor_type=predictor_type, use_batch_norm=use_batch_norm)
+        ddpg_model = DDPG(env, sess, actor, critic, actor_noise, obs_normalizer=obs_normalizer,
+                          config_file='config/stock.json', model_save_path=model_save_path,
+                          summary_path=summary_path)
+        ddpg_model.initialize(load_weights=False)
+        ddpg_model.train()

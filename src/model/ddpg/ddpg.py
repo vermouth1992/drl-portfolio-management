@@ -2,15 +2,11 @@
 The deep deterministic policy gradient model. Contains main training loop and deployment
 """
 from __future__ import print_function
-from past.builtins import raw_input
 
 import json
 import numpy as np
 import tensorflow as tf
-import sys
 
-from .actor import ActorNetwork
-from .critic import CriticNetwork
 from .replay_buffer import ReplayBuffer
 
 
