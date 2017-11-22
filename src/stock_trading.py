@@ -19,15 +19,18 @@ from utils.data import read_stock_history, normalize
 predictor_type = 'cnn'
 
 DEBUG = False
+use_batch_norm = True
 
 def stock_predictor(inputs, window_length):
     assert predictor_type in ['cnn', 'lstm'], 'type must be either cnn or lstm'
     if predictor_type == 'cnn':
         net = tflearn.conv_2d(inputs, 32, (1, 3), padding='valid')
-        net = tflearn.layers.normalization.batch_normalization(net)
+        if use_batch_norm:
+            net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
         net = tflearn.conv_2d(net, 32, (1, window_length - 2), padding='valid')
-        net = tflearn.layers.normalization.batch_normalization(net)
+        if use_batch_norm:
+            net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
         if DEBUG:
             print('After conv2d:', net.shape)
@@ -68,9 +71,13 @@ class StockActor(ActorNetwork):
         net = stock_predictor(inputs, window_length)
 
         net = tflearn.fully_connected(net, 64)
+        if use_batch_norm:
+            net = tflearn.layers.normalization.batch_normalization(net)
         # net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
         net = tflearn.fully_connected(net, 64)
+        if use_batch_norm:
+            net = tflearn.layers.normalization.batch_normalization(net)
         # net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
         # Final layer weights are init to Uniform[-3e-3, 3e-3]
@@ -94,9 +101,9 @@ class StockCritic(CriticNetwork):
         t1 = tflearn.fully_connected(net, 64)
         t2 = tflearn.fully_connected(action, 64)
 
-        # net = tflearn.activation(
-        #     tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
         net = tf.add(t1, t2)
+        if use_batch_norm:
+            net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
 
         # linear layer connected to 1 output representing Q(s,a)
