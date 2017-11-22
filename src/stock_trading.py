@@ -16,13 +16,10 @@ import tensorflow as tf
 from environment.portfolio import PortfolioEnv
 from utils.data import read_stock_history, normalize
 
-predictor_type = 'cnn'
-
-DEBUG = False
-use_batch_norm = True
+DEBUG = True
 
 
-def get_model_path(window_length):
+def get_model_path(window_length, predictor_type, use_batch_norm):
     if use_batch_norm:
         batch_norm_str = 'batch_norm'
     else:
@@ -30,7 +27,7 @@ def get_model_path(window_length):
     return 'weights/stock/{}/window_{}/{}/checkpoint.ckpt'.format(predictor_type, window_length, batch_norm_str)
 
 
-def get_result_path(window_length):
+def get_result_path(window_length, predictor_type, use_batch_norm):
     if use_batch_norm:
         batch_norm_str = 'batch_norm'
     else:
@@ -38,7 +35,8 @@ def get_result_path(window_length):
     return 'results/stock/{}/window_{}/{}/'.format(predictor_type, window_length, batch_norm_str)
 
 
-def stock_predictor(inputs, window_length):
+def stock_predictor(inputs, predictor_type, use_batch_norm):
+    window_length = inputs.get_shape()[2]
     assert predictor_type in ['cnn', 'lstm'], 'type must be either cnn or lstm'
     if predictor_type == 'cnn':
         net = tflearn.conv_2d(inputs, 32, (1, 3), padding='valid')
@@ -76,6 +74,12 @@ def stock_predictor(inputs, window_length):
 
 
 class StockActor(ActorNetwork):
+    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size,
+                 predictor_type, use_batch_norm):
+        self.predictor_type = predictor_type
+        self.use_batch_norm = use_batch_norm
+        ActorNetwork.__init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size)
+
     def create_actor_network(self):
         """
         self.s_dim: a list specifies shape
@@ -85,15 +89,15 @@ class StockActor(ActorNetwork):
         assert window_length > 2, 'This architecture only support window length larger than 2.'
         inputs = tflearn.input_data(shape=[None] + self.s_dim + [1], name='input')
 
-        net = stock_predictor(inputs, window_length)
+        net = stock_predictor(inputs, self.predictor_type, self.use_batch_norm)
 
         net = tflearn.fully_connected(net, 64)
-        if use_batch_norm:
+        if self.use_batch_norm:
             net = tflearn.layers.normalization.batch_normalization(net)
         # net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
         net = tflearn.fully_connected(net, 64)
-        if use_batch_norm:
+        if self.use_batch_norm:
             net = tflearn.layers.normalization.batch_normalization(net)
         # net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -106,12 +110,17 @@ class StockActor(ActorNetwork):
 
 
 class StockCritic(CriticNetwork):
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars,
+                 predictor_type, use_batch_norm):
+        self.predictor_type = predictor_type
+        self.use_batch_norm = use_batch_norm
+        CriticNetwork.__init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars)
+
     def create_critic_network(self):
-        nb_classes, window_length = self.s_dim
         inputs = tflearn.input_data(shape=[None] + self.s_dim + [1])
         action = tflearn.input_data(shape=[None] + self.a_dim)
 
-        net = stock_predictor(inputs, window_length)
+        net = stock_predictor(inputs, self.predictor_type, self.use_batch_norm)
 
         # Add the action tensor in the 2nd hidden layer
         # Use two temp layers to get the corresponding weights and biases
@@ -119,7 +128,7 @@ class StockCritic(CriticNetwork):
         t2 = tflearn.fully_connected(action, 64)
 
         net = tf.add(t1, t2)
-        if use_batch_norm:
+        if self.use_batch_norm:
             net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
 
@@ -178,13 +187,17 @@ if __name__ == '__main__':
     batch_size = 64
     action_bound = 1.
     tau = 1e-3
-    actor = StockActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size)
+    predictor_type = 'lstm'
+    use_batch_norm = True
+    actor = StockActor(sess, state_dim, action_dim, action_bound, 1e-4, tau, batch_size,
+                       predictor_type, use_batch_norm)
     critic = StockCritic(sess=sess, state_dim=state_dim, action_dim=action_dim, tau=1e-3,
-                         learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars())
+                         learning_rate=1e-3, num_actor_vars=actor.get_num_trainable_vars(),
+                         predictor_type=predictor_type, use_batch_norm=use_batch_norm)
     actor_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim))
 
-    model_save_path = get_model_path(window_length)
-    summary_path = get_result_path(window_length)
+    model_save_path = get_model_path(window_length, predictor_type, use_batch_norm)
+    summary_path = get_result_path(window_length, predictor_type, use_batch_norm)
 
     ddpg_model = DDPG(env, sess, actor, critic, actor_noise, obs_normalizer=obs_normalizer,
                       config_file='config/stock.json', model_save_path=model_save_path,
