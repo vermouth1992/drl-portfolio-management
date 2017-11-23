@@ -167,17 +167,31 @@ class DDPG(BaseModel):
         print('Finish.')
 
     def predict(self, observation):
-        """ predict the next action using actor model, only used in deploy
+        """ predict the next action using actor model, only used in deploy.
+            Can be used in multiple environments.
+
+        Args:
+            observation: (batch_size, num_stocks + 1, window_length)
+
+        Returns: action array with shape (batch_size, num_stocks + 1)
 
         """
         if self.obs_normalizer:
             observation = self.obs_normalizer(observation)
-        action = self.actor.predict(observation).squeeze(axis=0)
+        action = self.actor.predict(observation)
         if self.action_processor:
             action = self.action_processor(action)
         return action
 
     def predict_single(self, observation):
+        """ Predict the action of a single observation
+
+        Args:
+            observation: (num_stocks + 1, window_length)
+
+        Returns: a single action array with shape (num_stocks + 1,)
+
+        """
         if self.obs_normalizer:
             observation = self.obs_normalizer(observation)
         action = self.actor.predict(np.expand_dims(observation, axis=0)).squeeze(axis=0)

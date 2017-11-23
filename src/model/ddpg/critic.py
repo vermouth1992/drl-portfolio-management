@@ -6,6 +6,7 @@ Basically, it evaluates the value of (current action, previous action and observ
 import tensorflow as tf
 import tflearn
 
+
 class CriticNetwork(object):
     """
     Input to the network is the state and action, output is Q(s,a).
@@ -55,27 +56,6 @@ class CriticNetwork(object):
 
     def create_critic_network(self):
         raise NotImplementedError('Create critic should return (inputs, action, out)')
-        # inputs = tflearn.input_data(shape=[None, self.s_dim])
-        # action = tflearn.input_data(shape=[None, self.a_dim])
-        # net = tflearn.fully_connected(inputs, 256)
-        # net = tflearn.layers.normalization.batch_normalization(net)
-        # net = tflearn.activations.relu(net)
-        #
-        # # Add the action tensor in the 2nd hidden layer
-        # # Use two temp layers to get the corresponding weights and biases
-        # t1 = tflearn.fully_connected(net, 256)
-        # t2 = tflearn.fully_connected(action, 256)
-        #
-        # # net = tflearn.activation(
-        # #     tf.matmul(net, t1.W) + tf.matmul(action, t2.W) + t2.b, activation='relu')
-        # net = tf.add(t1, t2)
-        # net = tflearn.activations.relu(net)
-        #
-        # # linear layer connected to 1 output representing Q(s,a)
-        # # Weights are init to Uniform[-3e-3, 3e-3]
-        # w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
-        # out = tflearn.fully_connected(net, 1, weights_init=w_init)
-        # return inputs, action, out
 
     def train(self, inputs, action, predicted_q_value):
         return self.sess.run([self.out, self.optimize], feed_dict={

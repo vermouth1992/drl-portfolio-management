@@ -5,7 +5,6 @@ Author: Patrick Emami, Modified by Chi Zhang
 """
 
 import tensorflow as tf
-import tflearn
 
 
 # ===========================
@@ -76,20 +75,6 @@ class ActorNetwork(object):
 
     def create_actor_network(self):
         raise NotImplementedError('Create actor should return (inputs, out, scaled_out)')
-        # inputs = tflearn.input_data(shape=[None, self.s_dim])
-        # net = tflearn.fully_connected(inputs, 400)
-        # net = tflearn.layers.normalization.batch_normalization(net)
-        # net = tflearn.activations.relu(net)
-        # net = tflearn.fully_connected(net, 300)
-        # net = tflearn.layers.normalization.batch_normalization(net)
-        # net = tflearn.activations.relu(net)
-        # # Final layer weights are init to Uniform[-3e-3, 3e-3]
-        # w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
-        # out = tflearn.fully_connected(
-        #     net, self.a_dim, activation='softmax', weights_init=w_init)
-        # # Scale output to -action_bound to action_bound
-        # scaled_out = tf.multiply(out, self.action_bound)
-        # return inputs, out, scaled_out
 
     def train(self, inputs, a_gradient):
         self.sess.run(self.optimize, feed_dict={
