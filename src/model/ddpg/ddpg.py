@@ -200,11 +200,9 @@ class DDPG(BaseModel):
         return action
 
     def save_model(self, verbose=False):
-        try:
+        if not os.path.exists(self.model_save_path):
             os.makedirs(self.model_save_path, exist_ok=True)
-        except:
-            if verbose:
-                print('Model save folder already exists')
+
         saver = tf.train.Saver()
         model_path = saver.save(self.sess, self.model_save_path)
         print("Model saved in %s" % model_path)
