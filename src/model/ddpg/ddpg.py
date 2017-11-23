@@ -3,6 +3,7 @@ The deep deterministic policy gradient model. Contains main training loop and de
 """
 from __future__ import print_function
 
+import os
 import json
 import numpy as np
 import tensorflow as tf
@@ -184,6 +185,11 @@ class DDPG(object):
         return action
 
     def save_model(self, verbose=False):
+        try:
+            os.makedirs(self.model_save_path, exist_ok=True)
+        except:
+            if verbose:
+                print('Model save folder already exists')
         saver = tf.train.Saver()
         model_path = saver.save(self.sess, self.model_save_path)
         print("Model saved in %s" % model_path)
