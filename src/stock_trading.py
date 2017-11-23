@@ -150,7 +150,7 @@ def obs_normalizer(observation):
     """ Preprocess observation obtained by environment
 
     Args:
-        observation: (nb_classes, window_length, nun_features) or with info
+        observation: (nb_classes, window_length, num_features) or with info
 
     Returns: normalized
 

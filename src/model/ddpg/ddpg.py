@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from .replay_buffer import ReplayBuffer
+from ..base_model import BaseModel
 
 
 def build_summaries():
@@ -23,7 +24,7 @@ def build_summaries():
     return summary_ops, summary_vars
 
 
-class DDPG(object):
+class DDPG(BaseModel):
     def __init__(self, env, sess, actor, critic, actor_noise, obs_normalizer=None, action_processor=None,
                  config_file='config/default.json',
                  model_save_path='weights/ddpg/ddpg.ckpt', summary_path='results/ddpg/'):
