@@ -4,6 +4,7 @@ The deep deterministic policy gradient model. Contains main training loop and de
 from __future__ import print_function
 
 import os
+import traceback
 import json
 import numpy as np
 import tensorflow as tf
@@ -62,6 +63,7 @@ class DDPG(BaseModel):
                         print('Loading {} from checkpoint. Name: {}'.format(var.name, var_name))
                     param_dict[var_name] = var
             except:
+                traceback.print_exc()
                 print('Build model from scratch')
                 self.sess.run(tf.global_variables_initializer())
         else:

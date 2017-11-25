@@ -18,6 +18,9 @@ import tensorflow as tf
 import argparse
 import pprint
 
+DEBUG = False
+
+
 def get_model_path(window_length, predictor_type, use_batch_norm):
     if use_batch_norm:
         batch_norm_str = 'batch_norm'
