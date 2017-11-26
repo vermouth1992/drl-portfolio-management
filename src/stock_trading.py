@@ -118,6 +118,28 @@ class StockActor(ActorNetwork):
         scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
 
+    def train(self, inputs, a_gradient):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        self.sess.run(self.optimize, feed_dict={
+            self.inputs: inputs,
+            self.action_gradient: a_gradient
+        })
+
+    def predict(self, inputs):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run(self.scaled_out, feed_dict={
+            self.inputs: inputs
+        })
+
+    def predict_target(self, inputs):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run(self.target_scaled_out, feed_dict={
+            self.target_inputs: inputs
+        })
+
 
 class StockCritic(CriticNetwork):
     def __init__(self, sess, state_dim, action_dim, learning_rate, tau, num_actor_vars,
@@ -148,6 +170,39 @@ class StockCritic(CriticNetwork):
         out = tflearn.fully_connected(net, 1, weights_init=w_init)
         return inputs, action, out
 
+    def train(self, inputs, action, predicted_q_value):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run([self.out, self.optimize], feed_dict={
+            self.inputs: inputs,
+            self.action: action,
+            self.predicted_q_value: predicted_q_value
+        })
+
+    def predict(self, inputs, action):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run(self.out, feed_dict={
+            self.inputs: inputs,
+            self.action: action
+        })
+
+    def predict_target(self, inputs, action):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run(self.target_out, feed_dict={
+            self.target_inputs: inputs,
+            self.target_action: action
+        })
+
+    def action_gradients(self, inputs, actions):
+        window_length = self.s_dim[1]
+        inputs = inputs[:, :, -window_length:, :]
+        return self.sess.run(self.action_grads, feed_dict={
+            self.inputs: inputs,
+            self.action: actions
+        })
+
 
 def obs_normalizer(observation):
     """ Preprocess observation obtained by environment
@@ -175,6 +230,18 @@ def test_model(env, model):
     env.render()
 
 
+def test_model_multiple(env, models):
+    observation, info = env.reset()
+    done = False
+    while not done:
+        actions = []
+        for model in models:
+            actions.append(model.predict_single(observation))
+        actions = np.array(actions)
+        observation, _, done, info = env.step(actions)
+    env.render()
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Provide arguments for training different DDPG models')
@@ -188,7 +255,6 @@ if __name__ == '__main__':
 
     pprint.pprint(args)
 
-    global DEBUG
     if args['debug'] == 'True':
         DEBUG = True
     else:
