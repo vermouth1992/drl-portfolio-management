@@ -68,20 +68,20 @@
     
     \subsection{MDP formulation}
     \subsubsection{State and Action}
-    We define state $s_t$ as $(o_t, a_{i-1})$ pair, where $o_t$ is the obseration of timestamp $t$. Since we can't feed variable length data into CNN/LSTM models, we only consider the history price in a window length $W$. Thus,
+    We define state $s_t$ as $o_t$, where $o_t$ is the obseration of timestamp $t$. As the time goes by, the impact of history data decreases. Thus, we only consider the history price and news in a fixed window length $W$. Hence,
     \begin{equation}
     o_t=[\vec{v_{1,t}},\vec{v_{2,t}},\cdots,\vec{v_{N,t}}]
     \end{equation}
     where
     \begin{align}
     v_{i,t} &=\begin{bmatrix}
+    v_{i,t-W} \\
     v_{i,t-W+1} \\
-    v_{i,t-W+2} \\
     \vdots \\
-    v_{i,t}
+    v_{i,t-1}
     \end{bmatrix}
     \end{align}
-    The action $a_{i-1}$ is just \emph{portfolio weight vector} $w_{i-1}$. In this problem, we would like to train a policy network $\pi_{\theta}(a_t|s_t)=\pi_{\theta}(a_t|o_t,a_{t-1})$. We will directly use $s_t=(o_t, a_{i-1})$ in our following discussion.\\
+    and $N$ is the number of stocks. The action $a_{t}$ is just \emph{portfolio weight vector} $w_{t}$. Note that this is a continuous state and action space problem. We try to directly solve it in continuous space instead of using discretization in previous work \cite{cs229_stanford_portfolio, cs229_stanford_trading}. Essentially, we want to train a policy network $\pi_\theta(a_t|o_t)$.
     \subsubsection{State Transition}
     The underlining state evolution is determined by the market, which we don't have any control. What we can get is the observation state, which is the price. Since we will collect history price of various stocks, $o_t$ is given by the dataset instead of $o_{t-1}$.\\
     \subsubsection{Reward}
@@ -90,40 +90,46 @@
     \log{p_T}=\log{\prod_{t=1}^{T}\mu_t y_t\cdot w_{t-1}}=\sum_{t=1}^{T}\log(\mu_t y_t\cdot w_{t-1})
     \end{equation}
     Thus, we have $\log(\mu_t y_t\cdot w_{t-1})$ reward each timestamp, which avoids the sparsity of reward problem.\\
-    \subsubsection{Discount Factor}
-    The discount factor $\gamma$ is 1 because future rewards are as important as current rewards.
     
     \subsection{Datasets}
     \textbf{Stocks used:}
-    We are currently using 16 stocks from NASDAQ100 that we feel are representative of different sectors in the index fund. \\
+    We use 16 target stocks from NASDAQ100 that we feel are representative of different sectors in the index fund. They include "AAPL", "ATVI", "CMCSA", "COST", "CSX", "DISH", "EA", "EBAY", "FB", "GOOGL", "HAS", "ILMN", "INTC", "MAR", "REGN" and "SBUX".\\
     \textbf{Price Data:}
-    We collected history price of the stocks from 2012-08-13 to 2017-08-11. The price on each day contains (open, high, low, close, volume). We use 2012-08-13 to 2015-08-12 as training data and 2015-08-13 to 2017-08-11 as testing data.\\
+    We collected history price of the stocks from 2012-08-13 to 2017-08-11. The price on each day contains open, high, low and close. We use 2012-08-13 to 2015-08-12 as training data and 2015-08-13 to 2017-08-11 as testing data.\\
     \textbf{News Data:}
-    We have gathered all tweets referencing the stocks from 2016-03-28 to 2016-06-15. 
+    We gather all tweets referencing the stocks from 2016-03-28 to 2016-06-15.\\
+    \textbf{Additional Testing Data:}
+    As another form of backtesting, we randomly select 16 stocks from NASDAQ100 the network has never seen and test whether the network generalizes.
+    
     \section{Methods}
-    We consider both model-free and model-based approach. The main difference is that in model-based approach, we try to predict the open and close price of future timestamp before making actions. In model-free approach, we try to learn policy $\pi_{\theta}(a_t|s_t)$ directly from history data.
-    \subsection{Model-free Approach}
-    \subsubsection{Optimal Action and Imitation Learning}
+    We mainly consider model-free approach in our project. First, we train a predictor given a fixed history window length $W$ of price and news. With the predicted price, we can train a policy network $\pi_{\theta}(a_t|s_t)$ to maximize our portofolio value at the end of the trading period. Note that in practice, they are trained end-to-end instead of separately.
+    
+    \subsection{Data Preprocessing}
+    Instead of using the raw price data, we normalize the history price as $(\frac{close}{open} - 1)\times scale$. There are two main advantages:
+    \begin{enumerate}
+      \item The history price are all in the same scale regardless of their actual price.
+      \item Since the final portfolio is determined by the close/open ratio of each timestamp, it serves as a better feature compared with raw price.
+    \end{enumerate}
+    The \emph{scale} factor is heuristically set to 100 in our experiments.
+    
+    \subsection{Predictor Network}
+    
+    
+    
+    \subsection{Optimal Action and Imitation Learning}
     If we have a perfect predictor, then we can ignore risk and just pick the best stock for each day. We greedily choose the stock with the highest close/open ratio (taking into account trading cost of changing stocks), buying as much as possible on the open and selling all at the close. Here is one such possible monotonically increasing output: 
     
     \includegraphics[scale=0.5]{Optimal_with_trading_cost.png}
     
     Then, we can train a model by imitating optimal action: we have as input the previous state $(o_t, a_{t-1})$, and as output label we compute to our next day's action. We will be using a CNN and LSTM to do this and compare the results. I believe this approach will yield good outcomes if the model can generalize to unseen data.
     
-    \subsubsection{Deep Deterministic Policy Gradient (DDPG)}
+    \subsection{Deep Deterministic Policy Gradient (DDPG)}
     We applied similar reinforcement learning algorithm for continuous action space in this paper~\cite{DBLP:journals/corr/LillicrapHPHETS15}. However, we don't have any promising results yet. The main issue is that the model doesn't seem to be training because the action the actor network produces are all equally distributed weights. e.g. $[0.25, 0.25, 0.25, 0.25]$ if we have 3 stocks plus cash. I want to take some time to debug the network by seeing how the network is updated by the gradient at each step. Also, a key part is the exploration noise we added when sample actions. Currently, I just use uncorrelated Gaussian noise and the result is very bad. I would like to try parameter noise mentioned here \cite{DBLP:journals/corr/PlappertHDSCCAA17}. 
     
     
-    \subsection{Model-based Approach}
-    \subsubsection{Price/Risk Prediction}
-    Using pre-trained word embeddings from GloVe, we analyze sentiment from the tweets to determine a numerical effect of the tweets on the stock price. We combine this with some historical prices to build an LSTM to predict the next day's price and potential risk. 
-    \subsubsection{Planning}
-    Given a predictions on the next day's price and risk (represented as covaraiances), we want to build a balanced portfolio that maximizes return while minimizing risk. Details on how to do this still need to be fleshed out, but in the end we are looking at maximizing the Sharpe ratio: 
-    \begin{equation}
-    s = \frac{p_T - p_i}{\sigma}
-    \end{equation}
-    where $p_i$ represents risk-free inflation rate (1.02 per year) and $\sigma$ is the variance of the entire portfolio.
-    \subsubsection{End-to-End training}
+    \subsubsection{Critic Network Topology}
+   
+    
     
     \section{Results and Discussions}
     
