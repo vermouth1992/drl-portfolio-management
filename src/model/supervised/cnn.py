@@ -4,21 +4,25 @@ Train a supervised CNN model using optimal stock as label
 import numpy as np
 from keras import backend as K
 import os
-os.environ['KERAS_BACKEND'] = "theano"
+from importlib import reload
+os.environ['KERAS_BACKEND'] = 'theano'
 reload(K)
-assert K.backend() == "theano", "Couldn't load theano as keras backend"
+assert K.backend() == 'theano'
 K.set_image_dim_ordering('th')
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten
 from keras.layers import Conv2D, MaxPooling2D, BatchNormalization
 from keras.utils import np_utils
 from keras.models import load_model
+from keras.optimizers import Adam
+from ..base_model import BaseModel
 
-class CNN(object):
-    def __init__(self, env, weights_file='weights/cnn.h5'):
-        self.env = env
+class CNN(BaseModel):
+    def __init__(self, nb_classes, window_length, weights_file='weights/cnn.h5'):
         self.model = None
         self.weights_file = weights_file
+        self.nb_classes = nb_classes
+        self.window_length = window_length
     def build_model(self, load_weights=True):
         """ Load training history from path
 
@@ -35,29 +39,25 @@ class CNN(object):
         else:
             self.model = Sequential()
             
-            self.model.add(Conv2D(128, (1, 1), activation='relu', input_shape=(4,self.env.window_length+1,self.env.num_stocks)))
-            self.model.add(BatchNormalization())
-            self.model.add(Conv2D(64, (1, 1), activation='relu'))
-            self.model.add(BatchNormalization())
-            self.model.add(MaxPooling2D(pool_size=(1,1)))
-            self.model.add(Dropout(0.25))
-
+            self.model.add(Conv2D(filters=32, kernel_size=(1, 3), input_shape=(1, self.nb_classes-1, self.window_length),
+                     activation='relu'))
+            self.model.add(Dropout(0.5))
+            self.model.add(Conv2D(filters=32, kernel_size=(1, self.window_length - 2), activation='relu'))
+            self.model.add(Dropout(0.5))
             self.model.add(Flatten())
-            self.model.add(Dense(1024, activation='relu'))
-            self.model.add(BatchNormalization())
-            self.model.add(Dropout(0.4))
-            self.model.add(Dense(256, activation='relu'))
-            self.model.add(BatchNormalization())
-            self.model.add(Dropout(0.4))
-            self.model.add(Dense(self.env.num_stocks+1, activation='softmax'))
-            self.model.add(BatchNormalization())
-            
-            self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+            self.model.add(Dense(64, activation='relu'))
+            self.model.add(Dropout(0.5))
+            self.model.add(Dense(64, activation='relu'))
+            self.model.add(Dropout(0.5))
+            self.model.add(Dense(self.nb_classes, activation='softmax'))
+            self.model.compile(loss='categorical_crossentropy',
+                          optimizer=Adam(lr=1e-3),
+                          metrics=['accuracy'])
             print('Built model from scratch')
             
 
     def train(self, X_train, Y_train, verbose=True):
-        self.model.fit(X_train, Y_train, batch_size=32, epochs=10, verbose=verbose)
+        self.model.fit(X_train, Y_train, batch_size=128, epochs=100, verbose=verbose)
         self.model.save(self.weights_file)
         print('Finish.')
         
@@ -66,3 +66,17 @@ class CNN(object):
     
     def predict(self, X_test, verbose=False):
         return self.model.predict(X_test, verbose=verbose)
+    
+    def predict_single(self, observation):
+        """ Predict the action of a single observation
+
+        Args:
+            observation: (num_stocks + 1, window_length)
+
+        Returns: a single action array with shape (num_stocks + 1,)
+
+        """
+        obsX = observation[1:, -(self.window_length):, 3]/observation[1:, :, 0]
+        obsX = np.flip(obsX, axis = 1)
+        obsX = np.expand_dims(np.expand_dims(obsX, axis = 0), axis = 0)
+        return np.squeeze(self.model.predict(obsX), axis = 0)
