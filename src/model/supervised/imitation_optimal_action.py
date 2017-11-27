@@ -45,7 +45,7 @@ def train_optimal_action_given_future_obs(model, target_history, target_stocks,
         model.fit(X_train, Y_train, batch_size=128, epochs=20, validation_data=(X_test, Y_test), shuffle=True)
         save_weights = input('Type True to save weights\n')
         if save_weights:
-            model.save_weights(weight_path)
+            model.save(weight_path)
         continue_train = input('True to continue train, otherwise stop\n')
 
 
@@ -88,5 +88,5 @@ def train_optimal_action_given_history_obs(model, target_history, target_stocks,
                   shuffle=True)
         save_weights = input('Type True to save weights\n')
         if save_weights:
-            model.save_weights(weight_path)
+            model.save(weight_path)
         continue_train = input("True to continue train, otherwise stop training...\n")

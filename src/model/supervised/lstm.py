@@ -2,16 +2,10 @@
 Train a supervised CNN model using optimal stock as label
 """
 import numpy as np
-import os
-from keras import backend as K
 import keras
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten
-from keras.layers import LSTM
-from keras.layers.embeddings import Embedding
+from keras.layers import Dense, Dropout
 from keras.optimizers import Adam
-from keras.utils import np_utils
-from keras.models import load_model
 from ..base_model import BaseModel
 
 from utils.data import normalize
@@ -39,15 +33,25 @@ class StockLSTM(BaseModel):
             print('Successfully loaded model')
         else:
             self.model = Sequential()
-            self.model.add(keras.layers.LSTM(20, input_shape=(self.num_classes - 1, self.window_length), dropout=0.5))
+            self.model.add(keras.layers.LSTM(20, input_shape=(self.num_classes, self.window_length)))
+            self.model.add(Dense(64))
+            self.model.add(Dropout(0.5))
+            self.model.add(Dense(64))
+            self.model.add(Dropout(0.5))
             self.model.add(Dense(self.num_classes, activation='softmax'))
 
-            self.model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=1e-3), metrics=['accuracy'])
+            self.model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=1e-4), metrics=['accuracy'])
             print('Built model from scratch')
 
-    def train(self, X_train, Y_train, verbose=True):
-        self.model.fit(X_train, Y_train, batch_size=32, epochs=7, verbose=verbose)
-        self.model.save(self.weights_file)
+    def train(self, X_train, Y_train, X_val, Y_val, verbose=True):
+        continue_train = True
+        while continue_train:
+            self.model.fit(X_train, Y_train, batch_size=128, epochs=50, validation_data=(X_val, Y_val),
+                           shuffle=True, verbose=verbose)
+            save_weights = input('Type True to save weights\n')
+            if save_weights:
+                self.model.save(self.weights_file)
+            continue_train = input("True to continue train, otherwise stop training...\n")
         print('Finish.')
 
     def evaluate(self, X_test, Y_test, verbose=False):
@@ -65,8 +69,7 @@ class StockLSTM(BaseModel):
         Returns: a single action array with shape (num_stocks + 1,)
 
         """
-        obsX = observation[1:, -self.window_length:, 3] / observation[1:, -self.window_length:, 0]
+        obsX = observation[:, -self.window_length:, 3] / observation[:, -self.window_length:, 0]
         obsX = normalize(obsX)
-        obsX = np.flip(obsX, axis=1)
         obsX = np.expand_dims(obsX, axis=0)
         return np.squeeze(self.model.predict(obsX), axis=0)
