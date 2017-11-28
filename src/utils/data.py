@@ -24,6 +24,9 @@ exclude_set = {'AGN', 'PNR', 'UA', 'AAL', 'EVHC', 'CHTR', 'CCI', 'WBA', 'ETN', '
 target_list = ['AAPL', 'ATVI', 'CMCSA', 'COST', 'CSX', 'DISH', 'EA', 'EBAY', 'FB', 'GOOGL', 'HAS', 'ILMN', 'INTC',
                'MAR', 'REGN', 'SBUX']
 
+target_list_2 = ['FOX', 'FISV', 'EXPE', 'FAST', 'ESRX', 'DLTR', 'CTSH', 'CSCO', 'QCOM', 'PCLN', 'CELG',
+                 'AMGN', 'WFM', 'WDC', 'NVDA', 'STX']
+
 
 def normalize(x):
     """ Create a universal normalization function across close/open ratio
@@ -110,7 +113,7 @@ def create_dataset(filepath):
     write_to_h5py(history, abbreviation)
 
 
-def write_to_h5py(history, abbreviation, filepath='datasets/stocks_history.h5'):
+def write_to_h5py(history, abbreviation, filepath='datasets/stocks_history_2.h5'):
     """ Write a numpy array history and a list of string to h5py
 
     Args:
@@ -127,10 +130,11 @@ def write_to_h5py(history, abbreviation, filepath='datasets/stocks_history.h5'):
         f.create_dataset("abbreviation", data=abbr_array, dtype=string_dt)
 
 
-def create_target_dataset(filepath='datasets/stocks_history_target.h5'):
+def create_target_dataset(target_list, filepath='datasets/stocks_history_target.h5'):
     """ Create 16 company history datasets
 
     Args:
+        target_list:
         filepath:
 
     Returns:
