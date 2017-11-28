@@ -69,7 +69,10 @@ class StockLSTM(BaseModel):
         Returns: a single action array with shape (num_stocks + 1,)
 
         """
+        action = np.zeros((self.num_classes,))
         obsX = observation[:, -self.window_length:, 3] / observation[:, -self.window_length:, 0]
         obsX = normalize(obsX)
         obsX = np.expand_dims(obsX, axis=0)
-        return np.squeeze(self.model.predict(obsX), axis=0)
+        current_action_index = self.model.predict_classes(obsX, verbose=False)
+        action[current_action_index] = 1.0
+        return action
