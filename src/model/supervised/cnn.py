@@ -11,6 +11,7 @@ from ..base_model import BaseModel
 from utils.data import normalize
 
 import numpy as np
+import tensorflow as tf
 
 
 class StockCNN(BaseModel):
@@ -52,6 +53,8 @@ class StockCNN(BaseModel):
                                optimizer=Adam(lr=1e-3),
                                metrics=['accuracy'])
             print('Built model from scratch')
+        self.model._make_predict_function()
+        self.graph = tf.get_default_graph()
 
     def train(self, X_train, Y_train, X_val, Y_val, verbose=True):
         continue_train = True
@@ -82,4 +85,5 @@ class StockCNN(BaseModel):
         obsX = observation[:, -self.window_length:, 3:4] / observation[:, -self.window_length:, 0:1]
         obsX = normalize(obsX)
         obsX = np.expand_dims(obsX, axis=0)
-        return np.squeeze(self.model.predict(obsX), axis=0)
+        with self.graph.as_default():
+            return np.squeeze(self.model.predict(obsX), axis=0)

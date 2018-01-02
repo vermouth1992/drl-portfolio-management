@@ -2,6 +2,7 @@
 Train a supervised CNN model using optimal stock as label
 """
 import numpy as np
+import tensorflow as tf
 import keras
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
@@ -42,6 +43,8 @@ class StockLSTM(BaseModel):
 
             self.model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=1e-4), metrics=['accuracy'])
             print('Built model from scratch')
+        self.model._make_predict_function()
+        self.graph = tf.get_default_graph()
 
     def train(self, X_train, Y_train, X_val, Y_val, verbose=True):
         continue_train = True
@@ -73,6 +76,7 @@ class StockLSTM(BaseModel):
         obsX = observation[:, -self.window_length:, 3] / observation[:, -self.window_length:, 0]
         obsX = normalize(obsX)
         obsX = np.expand_dims(obsX, axis=0)
-        current_action_index = self.model.predict_classes(obsX, verbose=False)
+        with self.graph.as_default():
+            current_action_index = self.model.predict_classes(obsX, verbose=False)
         action[current_action_index] = 1.0
         return action
