@@ -6,6 +6,9 @@
 * Imitation Learning
 * Deep Deterministic Policy Gradient
 
+## Dataset
+* We use dataset from kaggle. It can be found [here](https://github.com/CNuge/kaggle_code/blob/master/stock_data/all_stocks_5yr.csv)
+
 ## Reference
 * [A Deep Reinforcement Learning Framework for the Financial Portfolio Management Problem](https://arxiv.org/abs/1706.10059)
 * The environment is inspired by https://github.com/wassname/rl-portfolio-management
