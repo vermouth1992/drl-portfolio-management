@@ -15,7 +15,7 @@ import gym
 
 class CartPoleActor(ActorNetwork):
     def create_actor_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim], name='input')
+        inputs = tflearn.input_data(shape=[None] + self.s_dim, name='input')
         net = tflearn.fully_connected(inputs, 400)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -25,7 +25,7 @@ class CartPoleActor(ActorNetwork):
         # Final layer weights are init to Uniform[-3e-3, 3e-3]
         w_init = tflearn.initializations.uniform(minval=-0.003, maxval=0.003)
         out = tflearn.fully_connected(
-            net, self.a_dim, activation='softmax', weights_init=w_init)
+            net, self.a_dim[0], activation='softmax', weights_init=w_init)
         # Scale output to -action_bound to action_bound
         scaled_out = tf.multiply(out, self.action_bound)
         return inputs, out, scaled_out
@@ -33,8 +33,8 @@ class CartPoleActor(ActorNetwork):
 
 class CartPoleCritic(CriticNetwork):
     def create_critic_network(self):
-        inputs = tflearn.input_data(shape=[None, self.s_dim])
-        action = tflearn.input_data(shape=[None, self.a_dim])
+        inputs = tflearn.input_data(shape=[None] + self.s_dim)
+        action = tflearn.input_data(shape=[None] + self.a_dim)
         net = tflearn.fully_connected(inputs, 256)
         net = tflearn.layers.normalization.batch_normalization(net)
         net = tflearn.activations.relu(net)
@@ -87,6 +87,6 @@ if __name__ == '__main__':
 
     ddpg_model = DDPG(env, sess, actor, critic, actor_noise, action_processor=np.argmax,
                           model_save_path='weights/cartpole/checkpoint.ckpt', summary_path='results/cartpole/')
-    ddpg_model.initialize(load_weights=True)
-    # ddpg_model.train()
-    test_model(env, ddpg_model)
+    ddpg_model.initialize(load_weights=False)
+    ddpg_model.train()
+    test_model(env, ddpg_model, 10)

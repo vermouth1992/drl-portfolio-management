@@ -1,5 +1,5 @@
 {
-  "episode": 500,
+  "episode": 1500,
   "max step": 1000,
   "buffer size": 100000,
   "batch size": 64,
