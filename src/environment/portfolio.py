@@ -292,7 +292,7 @@ class PortfolioEnv(gym.Env):
         # show a plot of portfolio vs mean market performance
         df_info = pd.DataFrame(self.infos)
         df_info.index = df_info["date"]
-        mdd = max_drawdown(df_info.rate_of_return + 1)
+        mdd = max_drawdown(df_info.portfolio_value)
         sharpe_ratio = sharpe(df_info.rate_of_return)
         title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
         df_info[["portfolio_value", "market_value"]].plot(title=title, fig=plt.gcf(), rot=30)
