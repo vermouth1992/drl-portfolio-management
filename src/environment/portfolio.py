@@ -291,7 +291,8 @@ class PortfolioEnv(gym.Env):
     def plot(self):
         # show a plot of portfolio vs mean market performance
         df_info = pd.DataFrame(self.infos)
-        df_info.index = df_info["date"]
+        df_info['date'] = pd.to_datetime(df_info['date'], format='%Y-%m-%d')
+        df_info.set_index('date', inplace=True)
         mdd = max_drawdown(df_info.rate_of_return + 1)
         sharpe_ratio = sharpe(df_info.rate_of_return)
         title = 'max_drawdown={: 2.2%} sharpe_ratio={: 2.4f}'.format(mdd, sharpe_ratio)
@@ -391,9 +392,8 @@ class MultiActionPortfolioEnv(PortfolioEnv):
 
     def plot(self):
         df_info = pd.DataFrame(self.infos)
-        df_info.index = df_info["date"]
-        fig = plt.gcf()
+        fig=plt.gcf()
         title = 'Trading Performance of Various Models'
-        # for model_name in self.model_names:
-        #     df_info[[model_name]].plot(title=title, fig=fig, rot=30)
+        df_info['date'] = pd.to_datetime(df_info['date'], format='%Y-%m-%d')
+        df_info.set_index('date', inplace=True)
         df_info[self.model_names + ['market_value']].plot(title=title, fig=fig, rot=30)
