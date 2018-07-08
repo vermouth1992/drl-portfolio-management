@@ -213,11 +213,14 @@ class PortfolioEnv(gym.Env):
         # openai gym attributes
         # action will be the portfolio weights from 0 to 1 for each asset
         self.action_space = gym.spaces.Box(
-            0, 1, shape=len(self.src.asset_names) + 1)  # include cash
+            0, 1, shape=(len(self.src.asset_names) + 1,), dtype=np.float32)  # include cash
 
         # get the observation space from the data min and max
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(len(abbreviation), window_length,
-                                                                                 history.shape[-1]))
+                                                                                 history.shape[-1]), dtype=np.float32)
+        
+    def step(self, action):
+        return self._step(action)
 
     def _step(self, action):
         """
@@ -267,6 +270,9 @@ class PortfolioEnv(gym.Env):
         self.infos.append(info)
 
         return observation, reward, done1 or done2, info
+    
+    def reset(self):
+        return self._reset()
 
     def _reset(self):
         self.infos = []
@@ -287,6 +293,9 @@ class PortfolioEnv(gym.Env):
             pprint(self.infos[-1])
         elif mode == 'human':
             self.plot()
+            
+    def render(self, mode='human', close=False):
+        return self._render(mode='human', close=False)
 
     def plot(self):
         # show a plot of portfolio vs mean market performance
